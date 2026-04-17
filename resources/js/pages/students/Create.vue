@@ -1,13 +1,50 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, usePage } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
+import IdCardPreview from '@/components/IdCardPreview.vue';
+import TemplateEditor from '@/components/TemplateEditor.vue';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ref } from 'vue';
+import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ref, computed } from 'vue';
 import { store as studentsStore } from '@/routes/students';
+import { User, Upload, Palette, UserCircle } from 'lucide-vue-next';
+
+type Template = { value: string; label: string };
+type TemplateConfig = {
+    front: {
+        background: {
+            type: string;
+            solidColor: string;
+            gradientStart: string;
+            gradientEnd: string;
+            gradientAngle: string;
+            imageBase64: string | null;
+        };
+        elements: any[];
+    };
+    back: {
+        background: {
+            type: string;
+            solidColor: string;
+            gradientStart: string;
+            gradientEnd: string;
+            gradientAngle: string;
+            imageBase64: string | null;
+        };
+        elements: any[];
+    };
+};
 
 defineOptions({
     layout: {
@@ -18,9 +55,35 @@ defineOptions({
     },
 });
 
-const currentTeam = window.location.pathname.split('/')[1] || 'default-team';
+const props = defineProps<{
+    templates: Template[];
+}>();
+
+const page = usePage();
+const currentTeam = computed(() => (page.props.currentTeam as any)?.slug ?? '');
 
 const photoPreview = ref<string | null>(null);
+const selectedTemplate = ref('classic');
+const templateConfig = ref<TemplateConfig | null>(null);
+const formName = ref('');
+const formCourse = ref('');
+const formContactNumber = ref('');
+const formGuardian = ref('');
+
+const previewData = computed(() => ({
+    name: formName.value || 'Student Name',
+    course: formCourse.value || 'Course',
+    studentIdNumber: '1000',
+    contactNumber: formContactNumber.value || '—',
+    guardianContactPerson: formGuardian.value || '—',
+    photoUrl: photoPreview.value,
+    schoolName: 'DCCP',
+}));
+
+const templateLabel = computed(() => {
+    const t = props.templates.find((t) => t.value === selectedTemplate.value);
+    return t?.label ?? 'Classic Blue';
+});
 
 function onPhotoChange(event: Event) {
     const target = event.target as HTMLInputElement;
@@ -33,16 +96,30 @@ function onPhotoChange(event: Event) {
         reader.readAsDataURL(file);
     }
 }
+
+const editorStudentData = computed(() => ({
+    name: formName.value || 'Student Name',
+    course: formCourse.value || 'Course',
+    studentIdNumber: '1000',
+    contactNumber: formContactNumber.value || '—',
+    guardianContactPerson: formGuardian.value || '—',
+}));
+
+function onTemplateConfigChange(newConfig: TemplateConfig) {
+    templateConfig.value = newConfig;
+}
 </script>
 
 <template>
     <Head title="Add Student" />
 
-    <div class="flex flex-col gap-6">
-        <Heading
-            title="Add Student"
-            description="Create a new student ID card"
-        />
+    <div class="space-y-6">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight">Add Student</h1>
+            <p class="text-sm text-muted-foreground">
+                Create a new student ID card with photo and template
+            </p>
+        </div>
 
         <Form
             :action="studentsStore.url({ current_team: currentTeam })"
@@ -50,98 +127,301 @@ function onPhotoChange(event: Event) {
             class="space-y-6"
             v-slot="{ errors, processing }"
         >
-            <Card>
-                <CardContent class="pt-6">
-                    <div class="grid gap-6">
-                        <div class="grid gap-2">
-                            <Label for="photo">Photo</Label>
-                            <div class="flex items-center gap-4">
-                                <div
-                                    class="flex h-24 w-24 items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50"
+            <div class="grid gap-6 lg:grid-cols-[1fr_380px]">
+                <div class="space-y-6">
+                    <Card>
+                        <CardHeader class="pb-4">
+                            <div class="flex items-center gap-2">
+                                <User class="size-4 text-muted-foreground" />
+                                <CardTitle class="text-base"
+                                    >Student Information</CardTitle
                                 >
-                                    <img
-                                        v-if="photoPreview"
-                                        :src="photoPreview"
-                                        alt="Preview"
-                                        class="h-full w-full object-cover"
+                            </div>
+                            <CardDescription
+                                >Enter the student's personal
+                                details</CardDescription
+                            >
+                        </CardHeader>
+                        <CardContent class="space-y-5">
+                            <div class="flex items-start gap-6">
+                                <div class="shrink-0">
+                                    <Label class="mb-2 block text-sm"
+                                        >Photo</Label
+                                    >
+                                    <label
+                                        class="group flex size-28 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-muted-foreground/25 bg-muted/30 transition-colors hover:border-primary/50 hover:bg-muted/50"
+                                    >
+                                        <img
+                                            v-if="photoPreview"
+                                            :src="photoPreview"
+                                            alt="Preview"
+                                            class="size-full rounded-[10px] object-cover"
+                                        />
+                                        <template v-else>
+                                            <Upload
+                                                class="size-5 text-muted-foreground/50 group-hover:text-primary/70"
+                                            />
+                                            <span
+                                                class="text-[10px] text-muted-foreground/60"
+                                                >Upload</span
+                                            >
+                                        </template>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            name="photo"
+                                            class="hidden"
+                                            @change="onPhotoChange"
+                                        />
+                                    </label>
+                                    <InputError :message="errors.photo" />
+                                </div>
+                                <div class="flex-1 space-y-4 pt-7">
+                                    <div class="space-y-1.5">
+                                        <Label for="name">Full Name</Label>
+                                        <Input
+                                            id="name"
+                                            name="name"
+                                            type="text"
+                                            required
+                                            placeholder="Juan Dela Cruz"
+                                            v-model="formName"
+                                        />
+                                        <InputError :message="errors.name" />
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <Label for="course">Course</Label>
+                                        <Input
+                                            id="course"
+                                            name="course"
+                                            type="text"
+                                            required
+                                            placeholder="BSIT, BSCS, BSN..."
+                                            v-model="formCourse"
+                                        />
+                                        <InputError :message="errors.course" />
+                                    </div>
+                                </div>
+                            </div>
+                            <Separator />
+                            <div class="grid gap-4 sm:grid-cols-2">
+                                <div class="space-y-1.5">
+                                    <Label for="contact_number"
+                                        >Contact Number</Label
+                                    >
+                                    <Input
+                                        id="contact_number"
+                                        name="contact_number"
+                                        type="text"
+                                        required
+                                        placeholder="09XX XXX XXXX"
+                                        v-model="formContactNumber"
+                                    />
+                                    <InputError
+                                        :message="errors.contact_number"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label for="guardian_contact_person"
+                                        >Guardian / Contact Person</Label
+                                    >
+                                    <Input
+                                        id="guardian_contact_person"
+                                        name="guardian_contact_person"
+                                        type="text"
+                                        required
+                                        placeholder="Name and number"
+                                        v-model="formGuardian"
+                                    />
+                                    <InputError
+                                        :message="
+                                            errors.guardian_contact_person
+                                        "
+                                    />
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader class="pb-4">
+                            <div class="flex items-center gap-2">
+                                <Palette class="size-4 text-muted-foreground" />
+                                <CardTitle class="text-base"
+                                    >Card Template</CardTitle
+                                >
+                            </div>
+                            <CardDescription
+                                >Choose a preset design or customize your
+                                own</CardDescription
+                            >
+                        </CardHeader>
+                        <CardContent>
+                            <div class="grid grid-cols-5 gap-3">
+                                <button
+                                    v-for="tmpl in templates.filter(
+                                        (t) => t.value !== 'custom',
+                                    )"
+                                    :key="tmpl.value"
+                                    type="button"
+                                    :class="[
+                                        'flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all',
+                                        selectedTemplate === tmpl.value
+                                            ? 'border-primary bg-primary/5 shadow-sm'
+                                            : 'border-transparent bg-muted/40 hover:border-muted-foreground/20 hover:bg-muted/60',
+                                    ]"
+                                    @click="
+                                        selectedTemplate = tmpl.value;
+                                        templateConfig = null;
+                                    "
+                                >
+                                    <IdCardPreview
+                                        :template="tmpl.value"
+                                        side="front"
+                                        :data="{
+                                            name: formName || 'Student',
+                                            course: formCourse || 'Course',
+                                            studentIdNumber: '1000',
+                                            contactNumber: '—',
+                                            guardianContactPerson: '—',
+                                            photoUrl: photoPreview,
+                                            schoolName: 'DCCP',
+                                        }"
+                                        :scale="0.32"
                                     />
                                     <span
-                                        v-else
-                                        class="text-xs text-muted-foreground"
-                                        >No photo</span
+                                        class="text-center text-[11px] leading-tight font-medium"
+                                        >{{ tmpl.label }}</span
                                     >
-                                </div>
-                                <Input
-                                    id="photo"
-                                    type="file"
-                                    accept="image/*"
-                                    name="photo"
-                                    class="cursor-pointer"
-                                    @change="onPhotoChange"
-                                />
+                                </button>
                             </div>
-                            <InputError :message="errors.photo" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="name">Full Name</Label>
-                            <Input
-                                id="name"
-                                name="name"
-                                type="text"
-                                required
-                                placeholder="Enter student's full name"
-                            />
-                            <InputError :message="errors.name" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="course">Course</Label>
-                            <Input
-                                id="course"
-                                name="course"
-                                type="text"
-                                required
-                                placeholder="e.g. BSIT, BSCS, BSN"
-                            />
-                            <InputError :message="errors.course" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="contact_number">Contact Number</Label>
-                            <Input
-                                id="contact_number"
-                                name="contact_number"
-                                type="text"
-                                required
-                                placeholder="Student's contact number"
-                            />
-                            <InputError :message="errors.contact_number" />
-                        </div>
-
-                        <div class="grid gap-2">
-                            <Label for="guardian_contact_person"
-                                >Guardian / Contact Person</Label
+                            <Separator class="my-4" />
+                            <button
+                                type="button"
+                                :class="[
+                                    'flex w-full items-center justify-center gap-2 rounded-lg border-2 p-3 transition-all',
+                                    selectedTemplate === 'custom'
+                                        ? 'border-primary bg-primary/5 shadow-sm'
+                                        : 'border-dashed border-muted-foreground/20 hover:border-primary/40 hover:bg-muted/50',
+                                ]"
+                                @click="selectedTemplate = 'custom'"
                             >
-                            <Input
-                                id="guardian_contact_person"
-                                name="guardian_contact_person"
-                                type="text"
-                                required
-                                placeholder="Guardian's name and contact number"
+                                <UserCircle class="size-4" />
+                                <span class="text-sm font-medium">{{
+                                    selectedTemplate === 'custom'
+                                        ? 'Editing Custom Template...'
+                                        : 'Design Your Own Template'
+                                }}</span>
+                            </button>
+                            <input
+                                type="hidden"
+                                name="template"
+                                :value="selectedTemplate"
                             />
-                            <InputError
-                                :message="errors.guardian_contact_person"
+                            <input
+                                type="hidden"
+                                name="template_config"
+                                :value="
+                                    selectedTemplate === 'custom' &&
+                                    templateConfig
+                                        ? JSON.stringify(templateConfig)
+                                        : ''
+                                "
                             />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                            <InputError :message="errors.template" />
+                        </CardContent>
+                    </Card>
 
-            <div class="flex items-center gap-4">
-                <Button :disabled="processing" type="submit"
-                    >Create Student</Button
-                >
+                    <div v-if="selectedTemplate === 'custom'" class="space-y-4">
+                        <Card>
+                            <CardHeader class="pb-3">
+                                <CardTitle class="text-base"
+                                    >Custom Template Editor</CardTitle
+                                >
+                                <CardDescription
+                                    >Drag elements to position them. Switch
+                                    between Front and Back to design both
+                                    sides.</CardDescription
+                                >
+                            </CardHeader>
+                            <CardContent>
+                                <TemplateEditor
+                                    :model-value="templateConfig"
+                                    :photo-url="photoPreview"
+                                    :student-data="editorStudentData"
+                                    @update:model-value="onTemplateConfigChange"
+                                />
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+
+                <div class="space-y-4 self-start lg:sticky lg:top-6">
+                    <Card v-if="selectedTemplate !== 'custom'">
+                        <CardHeader class="pb-3">
+                            <CardTitle class="text-base"
+                                >Live Preview</CardTitle
+                            >
+                            <CardDescription
+                                >{{ templateLabel }} template &middot; Front &
+                                Back</CardDescription
+                            >
+                        </CardHeader>
+                        <CardContent>
+                            <Tabs default-value="both">
+                                <TabsList class="w-full">
+                                    <TabsTrigger value="front" class="flex-1"
+                                        >Front</TabsTrigger
+                                    >
+                                    <TabsTrigger value="back" class="flex-1"
+                                        >Back</TabsTrigger
+                                    >
+                                    <TabsTrigger value="both" class="flex-1"
+                                        >Both</TabsTrigger
+                                    >
+                                </TabsList>
+                                <TabsContent
+                                    value="front"
+                                    class="mt-4 flex justify-center"
+                                >
+                                    <IdCardPreview
+                                        :template="selectedTemplate"
+                                        side="front"
+                                        :data="previewData"
+                                    />
+                                </TabsContent>
+                                <TabsContent
+                                    value="back"
+                                    class="mt-4 flex justify-center"
+                                >
+                                    <IdCardPreview
+                                        :template="selectedTemplate"
+                                        side="back"
+                                        :data="previewData"
+                                    />
+                                </TabsContent>
+                                <TabsContent
+                                    value="both"
+                                    class="mt-4 flex justify-center"
+                                >
+                                    <IdCardPreview
+                                        :template="selectedTemplate"
+                                        side="both"
+                                        :data="previewData"
+                                    />
+                                </TabsContent>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+
+                    <Button
+                        type="submit"
+                        :disabled="processing"
+                        class="w-full"
+                        size="lg"
+                        >Create Student</Button
+                    >
+                </div>
             </div>
         </Form>
     </div>

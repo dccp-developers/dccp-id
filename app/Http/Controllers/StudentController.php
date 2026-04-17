@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Http\Requests\Students\StoreStudentRequest;
 use App\Http\Requests\Students\UpdateStudentRequest;
 use App\Models\Student;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\LaravelPdf\Enums\Unit;
+use Spatie\LaravelPdf\Facades\Pdf;
 
 class StudentController extends Controller
 {
@@ -27,12 +28,15 @@ class StudentController extends Controller
         return Inertia::render('students/Index', [
             'students' => $students,
             'filters' => ['search' => $search],
+            'templates' => Student::availableTemplates(),
         ]);
     }
 
     public function create(string $currentTeam): Response
     {
-        return Inertia::render('students/Create');
+        return Inertia::render('students/Create', [
+            'templates' => Student::availableTemplates(),
+        ]);
     }
 
     public function store(StoreStudentRequest $request, string $currentTeam): RedirectResponse
@@ -56,6 +60,7 @@ class StudentController extends Controller
     {
         return Inertia::render('students/Show', [
             'student' => $student,
+            'templates' => Student::availableTemplates(),
         ]);
     }
 
@@ -63,6 +68,7 @@ class StudentController extends Controller
     {
         return Inertia::render('students/Edit', [
             'student' => $student,
+            'templates' => Student::availableTemplates(),
         ]);
     }
 
@@ -108,13 +114,30 @@ class StudentController extends Controller
             $photoBase64 = "data:{$mimeType};base64,{$photoBase64}";
         }
 
-        $pdf = Pdf::loadView('pdf.student-id', [
-            'student' => $student,
-            'photoBase64' => $photoBase64,
-        ]);
+        $template = $student->template ?? 'classic';
 
-        $pdf->setPaper([0, 0, 612, 792]);
+        if ($template === 'custom' && $student->template_config) {
+            $view = 'pdf.student-id-custom';
+            $viewData = [
+                'student' => $student,
+                'photoBase64' => $photoBase64,
+                'config' => $student->template_config,
+            ];
+        } else {
+            $view = "pdf.student-id-{$template}";
 
-        return $pdf->stream("student-id-{$student->student_id_number}.pdf");
+            if (! view()->exists($view)) {
+                $view = 'pdf.student-id-classic';
+            }
+
+            $viewData = [
+                'student' => $student,
+                'photoBase64' => $photoBase64,
+            ];
+        }
+
+        return Pdf::view($view, $viewData)
+            ->paperSize(53.98, 85.6, Unit::Millimeter)
+            ->inline("student-id-{$student->student_id_number}.pdf");
     }
 }

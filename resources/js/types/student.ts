@@ -6,6 +6,8 @@ export type Student = {
     contact_number: string;
     guardian_contact_person: string;
     photo_path: string | null;
+    template: string;
+    template_config: any;
     created_at: string;
     updated_at: string;
 };

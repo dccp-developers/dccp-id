@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['student_id_number', 'name', 'course', 'contact_number', 'guardian_contact_person', 'photo_path'])]
+#[Fillable(['student_id_number', 'name', 'course', 'contact_number', 'guardian_contact_person', 'photo_path', 'template', 'template_config'])]
 class Student extends Model
 {
     /** @use HasFactory<StudentFactory> */
@@ -38,6 +38,18 @@ class Student extends Model
         return (string) ((int) config('students.id_starting_number', 1000));
     }
 
+    public static function availableTemplates(): array
+    {
+        return [
+            ['value' => 'classic', 'label' => 'Classic Blue'],
+            ['value' => 'modern', 'label' => 'Modern Dark'],
+            ['value' => 'minimal', 'label' => 'Minimal White'],
+            ['value' => 'gradient', 'label' => 'Gradient Purple'],
+            ['value' => 'professional', 'label' => 'Professional Green'],
+            ['value' => 'custom', 'label' => 'Custom'],
+        ];
+    }
+
     public function photoUrl(): string
     {
         return $this->photo_path
@@ -47,6 +59,8 @@ class Student extends Model
 
     protected function casts(): array
     {
-        return [];
+        return [
+            'template_config' => 'array',
+        ];
     }
 }

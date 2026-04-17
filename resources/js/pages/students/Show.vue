@@ -1,9 +1,17 @@
 <script setup lang="ts">
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
-import Heading from '@/components/Heading.vue';
+import IdCardPreview from '@/components/IdCardPreview.vue';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import {
     Dialog,
     DialogContent,
@@ -12,9 +20,19 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Pencil, Download, Trash2 } from 'lucide-vue-next';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    index as studentsIndex,
+    Pencil,
+    Download,
+    Trash2,
+    ArrowLeft,
+    Phone,
+    Users,
+    Hash,
+    GraduationCap,
+    CreditCard,
+} from 'lucide-vue-next';
+import {
     edit as studentsEdit,
     pdf as studentsPdf,
     destroy as studentsDestroy,
@@ -28,10 +46,13 @@ type Student = {
     contact_number: string;
     guardian_contact_person: string;
     photo_path: string | null;
+    template: string;
+    template_config: any;
 };
 
 const props = defineProps<{
     student: Student;
+    templates: { value: string; label: string }[];
 }>();
 
 defineOptions({
@@ -43,11 +64,31 @@ defineOptions({
     },
 });
 
-const currentTeam = computed(
-    () => window.location.pathname.split('/')[1] || 'default-team',
-);
+const page = usePage();
+const currentTeam = computed(() => (page.props.currentTeam as any)?.slug ?? '');
 
 const deleteDialogOpen = ref(false);
+
+const templateLabels: Record<string, string> = {
+    classic: 'Classic Blue',
+    modern: 'Modern Dark',
+    minimal: 'Minimal White',
+    gradient: 'Gradient Purple',
+    professional: 'Professional Green',
+    custom: 'Custom',
+};
+
+const previewData = computed(() => ({
+    name: props.student.name,
+    course: props.student.course,
+    studentIdNumber: props.student.student_id_number,
+    contactNumber: props.student.contact_number,
+    guardianContactPerson: props.student.guardian_contact_person,
+    photoUrl: props.student.photo_path
+        ? `/storage/${props.student.photo_path}`
+        : null,
+    schoolName: 'DCCP',
+}));
 
 function deleteStudent() {
     router.delete(
@@ -67,9 +108,19 @@ function deleteStudent() {
 <template>
     <Head title="Student Details" />
 
-    <div class="flex flex-col gap-6">
-        <div class="flex items-center justify-between">
-            <Heading title="Student Details" />
+    <div class="space-y-6">
+        <div
+            class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+            <div>
+                <h1 class="text-2xl font-bold tracking-tight">
+                    {{ student.name }}
+                </h1>
+                <p class="text-sm text-muted-foreground">
+                    {{ student.course }} &middot;
+                    {{ student.student_id_number }}
+                </p>
+            </div>
             <div class="flex items-center gap-2">
                 <Link
                     :href="
@@ -80,7 +131,7 @@ function deleteStudent() {
                     "
                 >
                     <Button variant="outline" size="sm"
-                        ><Pencil class="size-4" /> Edit</Button
+                        ><Pencil class="mr-1.5 size-3.5" />Edit</Button
                     >
                 </Link>
                 <a
@@ -93,103 +144,207 @@ function deleteStudent() {
                     target="_blank"
                 >
                     <Button variant="outline" size="sm"
-                        ><Download class="size-4" /> Export PDF</Button
+                        ><Download class="mr-1.5 size-3.5" />PDF</Button
                     >
                 </a>
                 <Button
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
+                    class="text-destructive hover:bg-destructive/10"
                     @click="deleteDialogOpen = true"
-                    ><Trash2 class="size-4" /> Delete</Button
                 >
+                    <Trash2 class="mr-1.5 size-3.5" />Delete
+                </Button>
             </div>
         </div>
 
-        <div class="grid gap-6 lg:grid-cols-2">
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-sm text-muted-foreground"
-                        >FRONT - Public Information</CardTitle
-                    >
-                </CardHeader>
-                <CardContent>
-                    <div class="flex flex-col items-center gap-4">
-                        <div
-                            v-if="student.photo_path"
-                            class="h-32 w-32 overflow-hidden rounded-lg"
+        <div class="grid gap-6 lg:grid-cols-[1fr_400px]">
+            <div class="space-y-6">
+                <Card>
+                    <CardHeader class="pb-4">
+                        <CardTitle class="text-base"
+                            >Personal Information</CardTitle
                         >
-                            <img
-                                :src="`/storage/${student.photo_path}`"
-                                :alt="student.name"
-                                class="h-full w-full object-cover"
-                            />
-                        </div>
-                        <div
-                            v-else
-                            class="flex h-32 w-32 items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 bg-muted/50"
-                        >
-                            <span class="text-sm text-muted-foreground"
-                                >No Photo</span
+                    </CardHeader>
+                    <CardContent>
+                        <div class="flex items-center gap-5">
+                            <div
+                                class="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-muted-foreground/10 bg-muted"
                             >
+                                <img
+                                    v-if="student.photo_path"
+                                    :src="`/storage/${student.photo_path}`"
+                                    :alt="student.name"
+                                    class="size-full object-cover"
+                                />
+                                <span
+                                    v-else
+                                    class="text-2xl font-bold text-muted-foreground/40"
+                                    >{{
+                                        student.name
+                                            .split(' ')
+                                            .map((w) => w[0])
+                                            .join('')
+                                            .substring(0, 2)
+                                    }}</span
+                                >
+                            </div>
+                            <div class="min-w-0">
+                                <h2 class="truncate text-xl font-semibold">
+                                    {{ student.name }}
+                                </h2>
+                                <div class="mt-1 flex items-center gap-2">
+                                    <Badge
+                                        variant="secondary"
+                                        class="font-mono"
+                                        >{{ student.student_id_number }}</Badge
+                                    >
+                                    <Badge variant="outline">{{
+                                        templateLabels[student.template] ||
+                                        student.template
+                                    }}</Badge>
+                                </div>
+                            </div>
                         </div>
-                        <div class="text-center">
-                            <h3 class="text-lg font-semibold">
-                                {{ student.name }}
-                            </h3>
-                            <p class="text-sm text-muted-foreground">
-                                {{ student.course }}
-                            </p>
-                            <p
-                                class="mt-1 inline-block rounded bg-muted px-3 py-1 text-sm font-bold"
-                            >
-                                {{ student.student_id_number }}
-                            </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle class="text-sm text-muted-foreground"
-                        >BACK - Emergency Contact</CardTitle
-                    >
-                </CardHeader>
-                <CardContent>
-                    <div class="space-y-4">
-                        <div>
-                            <p
-                                class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+                        <Separator class="my-4" />
+
+                        <div class="grid gap-4 sm:grid-cols-2">
+                            <div
+                                class="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
                             >
-                                Contact Number
-                            </p>
-                            <p class="mt-1 text-sm font-semibold">
-                                {{ student.contact_number }}
-                            </p>
-                        </div>
-                        <div>
-                            <p
-                                class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+                                <GraduationCap
+                                    class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                                />
+                                <div>
+                                    <p
+                                        class="text-xs font-medium text-muted-foreground"
+                                    >
+                                        Course
+                                    </p>
+                                    <p class="text-sm font-semibold">
+                                        {{ student.course }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div
+                                class="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
                             >
-                                Guardian / Contact Person
-                            </p>
-                            <p class="mt-1 text-sm font-semibold">
-                                {{ student.guardian_contact_person }}
-                            </p>
-                        </div>
-                        <div class="border-t pt-4">
-                            <p
-                                class="text-xs font-medium tracking-wider text-muted-foreground uppercase"
+                                <Phone
+                                    class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                                />
+                                <div>
+                                    <p
+                                        class="text-xs font-medium text-muted-foreground"
+                                    >
+                                        Contact Number
+                                    </p>
+                                    <p class="text-sm font-semibold">
+                                        {{ student.contact_number }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div
+                                class="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
                             >
-                                Student ID
-                            </p>
-                            <p class="mt-1 font-mono text-sm">
-                                {{ student.student_id_number }}
-                            </p>
+                                <Users
+                                    class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                                />
+                                <div>
+                                    <p
+                                        class="text-xs font-medium text-muted-foreground"
+                                    >
+                                        Guardian
+                                    </p>
+                                    <p class="text-sm font-semibold">
+                                        {{ student.guardian_contact_person }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div
+                                class="flex items-start gap-3 rounded-lg bg-muted/40 p-3"
+                            >
+                                <CreditCard
+                                    class="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                                />
+                                <div>
+                                    <p
+                                        class="text-xs font-medium text-muted-foreground"
+                                    >
+                                        Student ID
+                                    </p>
+                                    <p class="font-mono text-sm font-semibold">
+                                        {{ student.student_id_number }}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div class="self-start lg:sticky lg:top-6">
+                <Card>
+                    <CardHeader class="pb-3">
+                        <CardTitle class="text-base">ID Card Preview</CardTitle>
+                        <CardDescription
+                            >{{
+                                templateLabels[student.template] ||
+                                'Classic Blue'
+                            }}
+                            template</CardDescription
+                        >
+                    </CardHeader>
+                    <CardContent>
+                        <Tabs default-value="both">
+                            <TabsList class="w-full">
+                                <TabsTrigger value="front" class="flex-1"
+                                    >Front</TabsTrigger
+                                >
+                                <TabsTrigger value="back" class="flex-1"
+                                    >Back</TabsTrigger
+                                >
+                                <TabsTrigger value="both" class="flex-1"
+                                    >Both</TabsTrigger
+                                >
+                            </TabsList>
+                            <TabsContent
+                                value="front"
+                                class="mt-4 flex justify-center"
+                            >
+                                <IdCardPreview
+                                    :template="student.template || 'classic'"
+                                    side="front"
+                                    :data="previewData"
+                                    :config="student.template_config"
+                                />
+                            </TabsContent>
+                            <TabsContent
+                                value="back"
+                                class="mt-4 flex justify-center"
+                            >
+                                <IdCardPreview
+                                    :template="student.template || 'classic'"
+                                    side="back"
+                                    :data="previewData"
+                                    :config="student.template_config"
+                                />
+                            </TabsContent>
+                            <TabsContent
+                                value="both"
+                                class="mt-4 flex justify-center"
+                            >
+                                <IdCardPreview
+                                    :template="student.template || 'classic'"
+                                    side="both"
+                                    :data="previewData"
+                                    :config="student.template_config"
+                                />
+                            </TabsContent>
+                        </Tabs>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     </div>
 
@@ -200,15 +355,16 @@ function deleteStudent() {
                 <DialogDescription>
                     Are you sure you want to delete
                     <strong>{{ student.name }}</strong
-                    >? This action cannot be undone.
+                    >? This action cannot be undone and will permanently remove
+                    their ID card record.
                 </DialogDescription>
             </DialogHeader>
-            <DialogFooter>
+            <DialogFooter class="gap-2">
                 <Button variant="outline" @click="deleteDialogOpen = false"
                     >Cancel</Button
                 >
                 <Button variant="destructive" @click="deleteStudent"
-                    >Delete</Button
+                    >Delete Student</Button
                 >
             </DialogFooter>
         </DialogContent>

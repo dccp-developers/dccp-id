@@ -19,6 +19,7 @@ class StudentFactory extends Factory
             'contact_number' => $this->faker->phoneNumber(),
             'guardian_contact_person' => $this->faker->name(),
             'photo_path' => null,
+            'template' => $this->faker->randomElement(['classic', 'modern', 'minimal', 'gradient', 'professional']),
         ];
     }
 }
