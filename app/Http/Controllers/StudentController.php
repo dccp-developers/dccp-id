@@ -28,14 +28,14 @@ class StudentController extends Controller
         return Inertia::render('students/Index', [
             'students' => $students,
             'filters' => ['search' => $search],
-            'templates' => Student::availableTemplates(),
+            'templates' => array_merge(\App\Models\Student::availableTemplates(), \App\Models\Template::all()->map(fn($t) => ['value' => 'db_' . $t->id, 'label' => $t->name, 'config' => $t->config])->toArray()),
         ]);
     }
 
     public function create(string $currentTeam): Response
     {
         return Inertia::render('students/Create', [
-            'templates' => Student::availableTemplates(),
+            'templates' => array_merge(\App\Models\Student::availableTemplates(), \App\Models\Template::all()->map(fn($t) => ['value' => 'db_' . $t->id, 'label' => $t->name, 'config' => $t->config])->toArray()),
         ]);
     }
 
@@ -60,7 +60,7 @@ class StudentController extends Controller
     {
         return Inertia::render('students/Show', [
             'student' => $student,
-            'templates' => Student::availableTemplates(),
+            'templates' => array_merge(\App\Models\Student::availableTemplates(), \App\Models\Template::all()->map(fn($t) => ['value' => 'db_' . $t->id, 'label' => $t->name, 'config' => $t->config])->toArray()),
         ]);
     }
 
@@ -68,7 +68,7 @@ class StudentController extends Controller
     {
         return Inertia::render('students/Edit', [
             'student' => $student,
-            'templates' => Student::availableTemplates(),
+            'templates' => array_merge(\App\Models\Student::availableTemplates(), \App\Models\Template::all()->map(fn($t) => ['value' => 'db_' . $t->id, 'label' => $t->name, 'config' => $t->config])->toArray()),
         ]);
     }
 
@@ -116,14 +116,29 @@ class StudentController extends Controller
 
         $template = $student->template ?? 'classic';
 
-        if ($template === 'custom' && $student->template_config) {
+        if (str_starts_with($template, 'db_')) {
+            $templateId = str_replace('db_', '', $template);
+            $dbTemplate = \App\Models\Template::find($templateId);
+            if ($dbTemplate) {
+                $view = 'pdf.student-id-custom';
+                $viewData = [
+                    'student' => $student,
+                    'photoBase64' => $photoBase64,
+                    'config' => $dbTemplate->config,
+                ];
+            } else {
+                $template = 'classic';
+            }
+        } elseif ($template === 'custom' && $student->template_config) {
             $view = 'pdf.student-id-custom';
             $viewData = [
                 'student' => $student,
                 'photoBase64' => $photoBase64,
                 'config' => $student->template_config,
             ];
-        } else {
+        }
+        
+        if (!isset($view)) {
             $view = "pdf.student-id-{$template}";
 
             if (! view()->exists($view)) {

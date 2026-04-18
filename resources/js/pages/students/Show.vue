@@ -313,10 +313,10 @@ function deleteStudent() {
                                 class="mt-4 flex justify-center"
                             >
                                 <IdCardPreview
-                                    :template="student.template || 'classic'"
+                                    :template="(student.template || 'classic').startsWith('db_') ? 'custom' : (student.template || 'classic')"
                                     side="front"
                                     :data="previewData"
-                                    :config="student.template_config"
+                                    :config="(student.template || 'classic').startsWith('db_') ? templates.find(t => t.value === student.template)?.config : student.template_config"
                                 />
                             </TabsContent>
                             <TabsContent
@@ -324,10 +324,10 @@ function deleteStudent() {
                                 class="mt-4 flex justify-center"
                             >
                                 <IdCardPreview
-                                    :template="student.template || 'classic'"
+                                    :template="(student.template || 'classic').startsWith('db_') ? 'custom' : (student.template || 'classic')"
                                     side="back"
                                     :data="previewData"
-                                    :config="student.template_config"
+                                    :config="(student.template || 'classic').startsWith('db_') ? templates.find(t => t.value === student.template)?.config : student.template_config"
                                 />
                             </TabsContent>
                             <TabsContent
@@ -335,10 +335,10 @@ function deleteStudent() {
                                 class="mt-4 flex justify-center"
                             >
                                 <IdCardPreview
-                                    :template="student.template || 'classic'"
+                                    :template="(student.template || 'classic').startsWith('db_') ? 'custom' : (student.template || 'classic')"
                                     side="both"
                                     :data="previewData"
-                                    :config="student.template_config"
+                                    :config="(student.template || 'classic').startsWith('db_') ? templates.find(t => t.value === student.template)?.config : student.template_config"
                                 />
                             </TabsContent>
                         </Tabs>

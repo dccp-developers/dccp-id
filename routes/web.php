@@ -17,6 +17,8 @@ Route::prefix('{current_team}')
 
         Route::resource('students', StudentController::class);
         Route::get('students/{student}/pdf', [StudentController::class, 'exportPdf'])->name('students.pdf');
+
+        Route::resource('templates', App\Http\Controllers\TemplateController::class);
     });
 
 Route::middleware(['auth'])->group(function () {

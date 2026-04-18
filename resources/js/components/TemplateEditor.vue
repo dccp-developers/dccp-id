@@ -3,15 +3,13 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Trash2,
     ImagePlus,
     Type,
     UserCircle,
-    Palette,
-    ArrowLeftRight,
     Undo2,
     Redo2,
     Bold,
@@ -20,10 +18,18 @@ import {
     AlignRight,
     CaseSensitive,
     Copy,
-    ChevronUp,
-    ChevronDown,
     MousePointerClick,
-    Maximize2,
+    Square,
+    Circle,
+    Minus,
+    QrCode,
+    ZoomIn,
+    ZoomOut,
+    MoveUp,
+    MoveDown,
+    Settings2,
+    Layers,
+    Palette,
 } from 'lucide-vue-next';
 
 type Background = {
@@ -42,9 +48,10 @@ type TextElement = {
     x: number;
     y: number;
     fontSize: number;
+    fontFamily: string;
     fontWeight: 'normal' | 'bold';
     color: string;
-    textAlign: 'left' | 'center' | 'right';
+    textAlign: 'left' | 'center' | 'right' | 'justify';
     textTransform: 'none' | 'uppercase' | 'lowercase';
     letterSpacing: number;
     lineHeight: number;
@@ -63,9 +70,39 @@ type PhotoElement = {
     opacity: number;
     borderColor: string;
     borderWidth: number;
+    rotation: number;
 };
 
-type TemplateElement = TextElement | PhotoElement;
+type ShapeElement = {
+    id: string;
+    type: 'shape';
+    shapeType: 'rectangle' | 'circle' | 'line';
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    backgroundColor: string;
+    borderColor: string;
+    borderWidth: number;
+    borderRadius: number;
+    opacity: number;
+    rotation: number;
+};
+
+type QrElement = {
+    id: string;
+    type: 'qr';
+    content: string;
+    x: number;
+    y: number;
+    size: number;
+    color: string;
+    backgroundColor: string;
+    opacity: number;
+    rotation: number;
+};
+
+type TemplateElement = TextElement | PhotoElement | ShapeElement | QrElement;
 
 type CardSide = {
     background: Background;
@@ -84,6 +121,23 @@ const DYNAMIC_FIELDS = [
     { label: 'Contact #', value: '{{student.contact_number}}' },
     { label: 'Guardian', value: '{{student.guardian_contact_person}}' },
     { label: 'School', value: '{{school_name}}' },
+];
+
+const FONTS = [
+    'Inter',
+    'Arial',
+    'Helvetica',
+    'Times New Roman',
+    'Courier New',
+    'Verdana',
+    'Georgia',
+    'Palatino',
+    'Garamond',
+    'Bookman',
+    'Comic Sans MS',
+    'Trebuchet MS',
+    'Arial Black',
+    'Impact',
 ];
 
 const props = defineProps<{
@@ -108,13 +162,20 @@ const isDragging = ref(false);
 const isResizing = ref(false);
 const resizeHandle = ref<string | null>(null);
 const dragOffset = ref({ x: 0, y: 0 });
-const resizeStart = ref({ x: 0, y: 0, width: 0, height: 0, elX: 0, elY: 0 });
+const resizeStart = ref({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    elX: 0,
+    elY: 0,
+    size: 0,
+});
 const canvasRef = ref<HTMLElement | null>(null);
-const fileInputRef = ref<HTMLInputElement | null>(null);
 const editingTextId = ref<string | null>(null);
 const editTextRef = ref<HTMLElement | null>(null);
-const showFieldPicker = ref(false);
 const snapLines = ref<{ type: 'vertical' | 'horizontal'; pos: number }[]>([]);
+const zoom = ref(100);
 
 const CARD_WIDTH = 320;
 const CARD_HEIGHT = 510;
@@ -163,29 +224,23 @@ const canRedo = computed(() => historyIndex.value < history.value.length - 1);
 watch(
     () => props.modelValue,
     (val) => {
-        if (val && !skipHistory.value) pushHistory(val);
+        if (
+            val &&
+            !skipHistory.value &&
+            !isDragging.value &&
+            !isResizing.value
+        ) {
+            pushHistory(val);
+        }
     },
     { immediate: true },
 );
 
-function makeTextElement(
-    overrides: Partial<TextElement> & { id: string },
-): TextElement {
-    return {
-        content: 'New Text',
-        x: 50,
-        y: 50,
-        fontSize: 10,
-        fontWeight: 'normal',
-        color: activeSide.value === 'front' ? '#ffffff' : '#333333',
-        textAlign: 'center',
-        textTransform: 'none',
-        letterSpacing: 0,
-        lineHeight: 1.2,
-        opacity: 100,
-        rotation: 0,
-        ...overrides,
-    } as TextElement;
+function zoomIn() {
+    zoom.value = Math.min(zoom.value + 10, 250);
+}
+function zoomOut() {
+    zoom.value = Math.max(zoom.value - 10, 30);
 }
 
 function getDefaultConfig(): TemplateConfig {
@@ -200,67 +255,104 @@ function getDefaultConfig(): TemplateConfig {
                 imageBase64: null,
             },
             elements: [
-                makeTextElement({
+                {
                     id: 'el-1',
+                    type: 'text',
                     content: '{{school_name}}',
                     x: 50,
                     y: 12,
-                    fontSize: 9,
+                    fontSize: 18,
+                    fontFamily: 'Inter',
                     fontWeight: 'bold',
                     color: '#ffffff',
                     textAlign: 'center',
                     textTransform: 'uppercase',
-                }),
-                makeTextElement({
+                    letterSpacing: 0,
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
+                {
                     id: 'el-2',
+                    type: 'text',
                     content: 'Student Identification Card',
                     x: 50,
                     y: 18,
-                    fontSize: 5,
+                    fontSize: 10,
+                    fontFamily: 'Inter',
+                    fontWeight: 'normal',
                     color: '#ffffff',
                     textAlign: 'center',
-                }),
+                    textTransform: 'none',
+                    letterSpacing: 0,
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
                 {
                     id: 'el-3',
                     type: 'photo',
                     x: 50,
                     y: 42,
-                    width: 17,
-                    height: 25,
+                    width: 35,
+                    height: 30,
                     borderRadius: 6,
                     opacity: 100,
                     borderColor: '#ffffff33',
                     borderWidth: 1,
+                    rotation: 0,
                 },
-                makeTextElement({
+                {
                     id: 'el-4',
+                    type: 'text',
                     content: '{{student.name}}',
                     x: 50,
                     y: 68,
-                    fontSize: 11,
+                    fontSize: 20,
+                    fontFamily: 'Inter',
                     fontWeight: 'bold',
                     color: '#ffffff',
+                    textAlign: 'center',
+                    textTransform: 'none',
                     letterSpacing: 0.5,
-                }),
-                makeTextElement({
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
+                {
                     id: 'el-5',
+                    type: 'text',
                     content: '{{student.course}}',
                     x: 50,
                     y: 76,
-                    fontSize: 8,
+                    fontSize: 14,
+                    fontFamily: 'Inter',
+                    fontWeight: 'normal',
                     color: '#ffffffcc',
                     textAlign: 'center',
-                }),
-                makeTextElement({
+                    textTransform: 'none',
+                    letterSpacing: 0,
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
+                {
                     id: 'el-6',
+                    type: 'text',
                     content: '{{student.student_id_number}}',
                     x: 50,
                     y: 85,
-                    fontSize: 8,
+                    fontSize: 14,
+                    fontFamily: 'Inter',
                     fontWeight: 'bold',
                     color: '#ffffff',
+                    textAlign: 'center',
+                    textTransform: 'none',
                     letterSpacing: 1,
-                }),
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
             ],
         },
         back: {
@@ -273,68 +365,86 @@ function getDefaultConfig(): TemplateConfig {
                 imageBase64: null,
             },
             elements: [
-                makeTextElement({
+                {
                     id: 'el-b1',
+                    type: 'text',
                     content: '{{school_name}}',
                     x: 50,
                     y: 15,
-                    fontSize: 8,
+                    fontSize: 16,
+                    fontFamily: 'Inter',
                     fontWeight: 'bold',
                     color: '#333333',
+                    textAlign: 'center',
                     textTransform: 'uppercase',
-                }),
-                makeTextElement({
+                    letterSpacing: 0,
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
+                {
                     id: 'el-b2',
+                    type: 'text',
                     content: 'Emergency Contact',
                     x: 50,
                     y: 22,
-                    fontSize: 5,
+                    fontSize: 10,
+                    fontFamily: 'Inter',
+                    fontWeight: 'normal',
                     color: '#888888',
-                }),
-                makeTextElement({
-                    id: 'el-b3',
-                    content: 'Contact Number',
-                    x: 50,
-                    y: 40,
-                    fontSize: 6,
-                    color: '#888888',
-                    textTransform: 'uppercase',
-                }),
-                makeTextElement({
+                    textAlign: 'center',
+                    textTransform: 'none',
+                    letterSpacing: 0,
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
+                {
                     id: 'el-b4',
+                    type: 'text',
                     content: '{{student.contact_number}}',
                     x: 50,
                     y: 48,
-                    fontSize: 10,
+                    fontSize: 18,
+                    fontFamily: 'Inter',
                     fontWeight: 'bold',
                     color: '#333333',
-                }),
-                makeTextElement({
-                    id: 'el-b5',
-                    content: 'Guardian',
-                    x: 50,
-                    y: 60,
-                    fontSize: 6,
-                    color: '#888888',
-                    textTransform: 'uppercase',
-                }),
-                makeTextElement({
+                    textAlign: 'center',
+                    textTransform: 'none',
+                    letterSpacing: 0,
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
+                {
                     id: 'el-b6',
+                    type: 'text',
                     content: '{{student.guardian_contact_person}}',
                     x: 50,
                     y: 68,
-                    fontSize: 10,
+                    fontSize: 18,
+                    fontFamily: 'Inter',
                     fontWeight: 'bold',
                     color: '#333333',
-                }),
-                makeTextElement({
+                    textAlign: 'center',
+                    textTransform: 'none',
+                    letterSpacing: 0,
+                    lineHeight: 1.2,
+                    opacity: 100,
+                    rotation: 0,
+                },
+                {
                     id: 'el-b7',
-                    content: 'ID: {{student.student_id_number}}',
+                    type: 'qr',
+                    content: '{{student.student_id_number}}',
                     x: 50,
                     y: 88,
-                    fontSize: 7,
-                    color: '#999999',
-                }),
+                    size: 25,
+                    color: '#000000',
+                    backgroundColor: '#ffffff',
+                    opacity: 100,
+                    rotation: 0,
+                },
             ],
         },
     };
@@ -357,25 +467,27 @@ const selectedElement = computed(() => {
         ) ?? null
     );
 });
-const selectedTextElement = computed((): TextElement | null => {
-    if (!selectedElementId.value) return null;
-    const el = currentSide.value.elements.find(
-        (e) => e.id === selectedElementId.value,
-    );
-    return el && el.type === 'text' ? el : null;
-});
-const selectedPhotoElement = computed((): PhotoElement | null => {
-    if (!selectedElementId.value) return null;
-    const el = currentSide.value.elements.find(
-        (e) => e.id === selectedElementId.value,
-    );
-    return el && el.type === 'photo' ? el : null;
-});
 
 function addTextElement() {
     const id = `el-${Date.now()}`;
     updateConfig((c) => {
-        c[activeSide.value].elements.push(makeTextElement({ id }));
+        c[activeSide.value].elements.push({
+            id,
+            type: 'text',
+            content: 'New Text',
+            x: 50,
+            y: 50,
+            fontSize: 16,
+            fontFamily: 'Inter',
+            fontWeight: 'normal',
+            color: activeSide.value === 'front' ? '#ffffff' : '#333333',
+            textAlign: 'center',
+            textTransform: 'none',
+            letterSpacing: 0,
+            lineHeight: 1.2,
+            opacity: 100,
+            rotation: 0,
+        });
     });
     selectedElementId.value = id;
 }
@@ -387,29 +499,69 @@ function addPhotoElement() {
             id,
             type: 'photo',
             x: 50,
-            y: 40,
-            width: 17,
-            height: 25,
+            y: 50,
+            width: 35,
+            height: 30,
             borderRadius: 6,
             opacity: 100,
             borderColor: '#ffffff33',
             borderWidth: 1,
+            rotation: 0,
+        });
+    });
+    selectedElementId.value = id;
+}
+
+function addShapeElement(shapeType: 'rectangle' | 'circle' | 'line') {
+    const id = `el-${Date.now()}`;
+    updateConfig((c) => {
+        c[activeSide.value].elements.push({
+            id,
+            type: 'shape',
+            shapeType,
+            x: 50,
+            y: 50,
+            width: 30,
+            height: shapeType === 'line' ? 1 : 30,
+            backgroundColor: shapeType === 'line' ? '#000000' : '#3b82f6',
+            borderColor: '#000000',
+            borderWidth: 0,
+            borderRadius: shapeType === 'circle' ? 50 : 0,
+            opacity: 100,
+            rotation: 0,
+        });
+    });
+    selectedElementId.value = id;
+}
+
+function addQrElement() {
+    const id = `el-${Date.now()}`;
+    updateConfig((c) => {
+        c[activeSide.value].elements.push({
+            id,
+            type: 'qr',
+            content: '{{student.student_id_number}}',
+            x: 50,
+            y: 50,
+            size: 25,
+            color: '#000000',
+            backgroundColor: '#ffffff',
+            opacity: 100,
+            rotation: 0,
         });
     });
     selectedElementId.value = id;
 }
 
 function duplicateElement(id: string) {
-    const el = currentSide.value.elements.find((e) => e.id === id);
-    if (!el) return;
     const newId = `el-${Date.now()}`;
     updateConfig((c) => {
         const src = c[activeSide.value].elements.find((e) => e.id === id);
         if (!src) return;
         const clone = JSON.parse(JSON.stringify(src));
         clone.id = newId;
-        (clone as any).x = Math.min(95, (src as any).x + 3);
-        (clone as any).y = Math.min(95, (src as any).y + 3);
+        clone.x = Math.min(95, clone.x + 3);
+        clone.y = Math.min(95, clone.y + 3);
         c[activeSide.value].elements.push(clone);
     });
     selectedElementId.value = newId;
@@ -438,13 +590,9 @@ function deleteElement(id: string) {
     if (editingTextId.value === id) editingTextId.value = null;
 }
 
-function selectElement(id: string) {
-    selectedElementId.value = id;
-}
-
 function onCanvasClick() {
     selectedElementId.value = null;
-    showFieldPicker.value = false;
+    editingTextId.value = null;
 }
 
 function startEditText(elId: string) {
@@ -478,7 +626,6 @@ function finishEditText() {
 function onEditTextBlur() {
     finishEditText();
 }
-
 function onEditTextInput(e: Event) {
     const target = e.target as HTMLElement;
     const text = target.innerText || target.textContent || '';
@@ -500,9 +647,10 @@ function onElementMouseDown(e: MouseEvent, elId: string) {
     if (!el) return;
     const canvasRect = canvasRef.value?.getBoundingClientRect();
     if (!canvasRect) return;
+    const zoomFactor = zoom.value / 100;
     dragOffset.value = {
-        x: e.clientX - (canvasRect.width * el.x) / 100,
-        y: e.clientY - (canvasRect.height * el.y) / 100,
+        x: e.clientX / zoomFactor - (CARD_WIDTH * el.x) / 100,
+        y: e.clientY / zoomFactor - (CARD_HEIGHT * el.y) / 100,
     };
 }
 
@@ -513,12 +661,14 @@ function onResizeMouseDown(e: MouseEvent, elId: string, handle: string) {
     isResizing.value = true;
     resizeHandle.value = handle;
     const el = currentSide.value.elements.find((e2) => e2.id === elId);
-    if (!el || el.type !== 'photo') return;
+    if (!el) return;
+    const zoomFactor = zoom.value / 100;
     resizeStart.value = {
-        x: e.clientX,
-        y: e.clientY,
-        width: el.width,
-        height: el.height,
+        x: e.clientX / zoomFactor,
+        y: e.clientY / zoomFactor,
+        width: (el as any).width || 0,
+        height: (el as any).height || 0,
+        size: (el as any).size || 0,
         elX: el.x,
         elY: el.y,
     };
@@ -546,78 +696,97 @@ function onMouseMove(e: MouseEvent) {
         resizeHandle.value &&
         canvasRef.value
     ) {
-        const canvasRect = canvasRef.value.getBoundingClientRect();
-        const dx = e.clientX - resizeStart.value.x;
-        const dy = e.clientY - resizeStart.value.y;
-        const dwPct = (dx / canvasRect.width) * 100;
-        const dhPct = (dy / canvasRect.height) * 100;
+        const zoomFactor = zoom.value / 100;
+        const currentX = e.clientX / zoomFactor;
+        const currentY = e.clientY / zoomFactor;
+        const dx = currentX - resizeStart.value.x;
+        const dy = currentY - resizeStart.value.y;
+
+        const dwPct = (dx / CARD_WIDTH) * 100;
+        const dhPct = (dy / CARD_HEIGHT) * 100;
 
         updateConfig((c) => {
             const el = c[activeSide.value].elements.find(
                 (e2) => e2.id === selectedElementId.value,
             );
-            if (!el || el.type !== 'photo') return;
+            if (!el) return;
 
-            if (resizeHandle.value === 'se') {
-                el.width = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.width + dwPct),
-                );
-                el.height = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.height + dhPct),
-                );
-            } else if (resizeHandle.value === 'sw') {
-                const newWidth = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.width - dwPct),
-                );
-                const widthDiff = newWidth - resizeStart.value.width;
-                el.width = newWidth;
-                el.x = Math.max(
-                    5,
-                    Math.min(95, resizeStart.value.elX - widthDiff / 2),
-                );
-                el.height = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.height + dhPct),
-                );
-            } else if (resizeHandle.value === 'ne') {
-                const newHeight = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.height - dhPct),
-                );
-                const heightDiff = newHeight - resizeStart.value.height;
-                el.width = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.width + dwPct),
-                );
-                el.height = newHeight;
-                el.y = Math.max(
-                    5,
-                    Math.min(95, resizeStart.value.elY - heightDiff / 2),
-                );
-            } else if (resizeHandle.value === 'nw') {
-                const newWidth = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.width - dwPct),
-                );
-                const newHeight = Math.max(
-                    MIN_SIZE,
-                    Math.min(80, resizeStart.value.height - dhPct),
-                );
-                const widthDiff = newWidth - resizeStart.value.width;
-                const heightDiff = newHeight - resizeStart.value.height;
-                el.width = newWidth;
-                el.height = newHeight;
-                el.x = Math.max(
-                    5,
-                    Math.min(95, resizeStart.value.elX - widthDiff / 2),
-                );
-                el.y = Math.max(
-                    5,
-                    Math.min(95, resizeStart.value.elY - heightDiff / 2),
-                );
+            if (el.type === 'qr') {
+                if (resizeHandle.value === 'se') {
+                    const newSize = Math.max(
+                        MIN_SIZE,
+                        Math.min(
+                            80,
+                            resizeStart.value.size + Math.max(dwPct, dhPct),
+                        ),
+                    );
+                    el.size = newSize;
+                }
+                return;
+            }
+
+            if (el.type === 'photo' || el.type === 'shape') {
+                if (resizeHandle.value === 'se') {
+                    el.width = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.width + dwPct),
+                    );
+                    el.height = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.height + dhPct),
+                    );
+                } else if (resizeHandle.value === 'sw') {
+                    const newWidth = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.width - dwPct),
+                    );
+                    const widthDiff = newWidth - resizeStart.value.width;
+                    el.width = newWidth;
+                    el.x = Math.max(
+                        0,
+                        Math.min(100, resizeStart.value.elX - widthDiff / 2),
+                    );
+                    el.height = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.height + dhPct),
+                    );
+                } else if (resizeHandle.value === 'ne') {
+                    const newHeight = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.height - dhPct),
+                    );
+                    const heightDiff = newHeight - resizeStart.value.height;
+                    el.width = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.width + dwPct),
+                    );
+                    el.height = newHeight;
+                    el.y = Math.max(
+                        0,
+                        Math.min(100, resizeStart.value.elY - heightDiff / 2),
+                    );
+                } else if (resizeHandle.value === 'nw') {
+                    const newWidth = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.width - dwPct),
+                    );
+                    const newHeight = Math.max(
+                        MIN_SIZE,
+                        Math.min(100, resizeStart.value.height - dhPct),
+                    );
+                    const widthDiff = newWidth - resizeStart.value.width;
+                    const heightDiff = newHeight - resizeStart.value.height;
+                    el.width = newWidth;
+                    el.height = newHeight;
+                    el.x = Math.max(
+                        0,
+                        Math.min(100, resizeStart.value.elX - widthDiff / 2),
+                    );
+                    el.y = Math.max(
+                        0,
+                        Math.min(100, resizeStart.value.elY - heightDiff / 2),
+                    );
+                }
             }
         });
         return;
@@ -625,11 +794,16 @@ function onMouseMove(e: MouseEvent) {
 
     if (!isDragging.value || !selectedElementId.value || !canvasRef.value)
         return;
-    const canvasRect = canvasRef.value.getBoundingClientRect();
-    const rawX = ((e.clientX - dragOffset.value.x) / canvasRect.width) * 100;
-    const rawY = ((e.clientY - dragOffset.value.y) / canvasRect.height) * 100;
-    const newX = computeSnap(Math.max(5, Math.min(95, rawX)), 'x');
-    const newY = computeSnap(Math.max(5, Math.min(95, rawY)), 'y');
+
+    const zoomFactor = zoom.value / 100;
+    const rawX =
+        ((e.clientX / zoomFactor - dragOffset.value.x) / CARD_WIDTH) * 100;
+    const rawY =
+        ((e.clientY / zoomFactor - dragOffset.value.y) / CARD_HEIGHT) * 100;
+
+    const newX = computeSnap(Math.max(0, Math.min(100, rawX)), 'x');
+    const newY = computeSnap(Math.max(0, Math.min(100, rawY)), 'y');
+
     updateConfig((c) => {
         const el = c[activeSide.value].elements.find(
             (e2) => e2.id === selectedElementId.value,
@@ -642,10 +816,14 @@ function onMouseMove(e: MouseEvent) {
 }
 
 function onMouseUp() {
+    const wasActive = isDragging.value || isResizing.value;
     isDragging.value = false;
     isResizing.value = false;
     resizeHandle.value = null;
     snapLines.value = [];
+    if (wasActive) {
+        pushHistory(config.value);
+    }
 }
 
 function onBackgroundImageUpload(e: Event) {
@@ -663,31 +841,16 @@ function onBackgroundImageUpload(e: Event) {
     reader.readAsDataURL(file);
 }
 
-function insertField(field: string) {
-    if (!selectedElementId.value) return;
-    const el = currentSide.value.elements.find(
-        (e) => e.id === selectedElementId.value,
-    );
-    if (!el || el.type !== 'text') return;
-    updateConfig((c) => {
-        const txt = c[activeSide.value].elements.find(
-            (e) => e.id === selectedElementId.value,
-        );
-        if (txt && txt.type === 'text') txt.content = field;
-    });
-    showFieldPicker.value = false;
-}
-
 function resolveContent(content: string): string {
     const map: Record<string, string> = {
-        '{{student.name}}': props.studentData.name || 'Student Name',
-        '{{student.course}}': props.studentData.course || 'Course',
+        '{{student.name}}': props.studentData?.name || 'Student Name',
+        '{{student.course}}': props.studentData?.course || 'Course',
         '{{student.student_id_number}}':
-            props.studentData.studentIdNumber || '1000',
+            props.studentData?.studentIdNumber || '1000',
         '{{student.contact_number}}':
-            props.studentData.contactNumber || '\u2014',
+            props.studentData?.contactNumber || '\u2014',
         '{{student.guardian_contact_person}}':
-            props.studentData.guardianContactPerson || '\u2014',
+            props.studentData?.guardianContactPerson || '\u2014',
         '{{school_name}}': 'DCCP',
     };
     return map[content] ?? content;
@@ -707,21 +870,13 @@ function getBackgroundStyle(bg: Background): Record<string, string> {
     return { backgroundColor: bg.solidColor || '#1e3a5f' };
 }
 
-function updateTextProp(prop: string, value: any) {
+function updateSelectedProp(prop: string, value: any) {
+    if (!selectedElementId.value) return;
     updateConfig((c) => {
         const el = c[activeSide.value].elements.find(
             (e) => e.id === selectedElementId.value,
         );
-        if (el && el.type === 'text') (el as any)[prop] = value;
-    });
-}
-
-function updatePhotoProp(prop: string, value: any) {
-    updateConfig((c) => {
-        const el = c[activeSide.value].elements.find(
-            (e) => e.id === selectedElementId.value,
-        );
-        if (el && el.type === 'photo') (el as any)[prop] = value;
+        if (el) (el as any)[prop] = value;
     });
 }
 
@@ -733,7 +888,12 @@ function onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Delete' || e.key === 'Backspace') {
         if (!selectedElementId.value) return;
         const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+        if (
+            target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT'
+        )
+            return;
         e.preventDefault();
         deleteElement(selectedElementId.value);
     }
@@ -765,82 +925,456 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="space-y-4">
-        <div class="flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-1.5">
+    <div
+        class="flex h-[800px] flex-col overflow-hidden rounded-xl border bg-background font-sans shadow-xl"
+    >
+        <!-- Top Bar -->
+        <div
+            class="flex h-14 items-center justify-between border-b bg-muted/20 px-4"
+        >
+            <div class="flex items-center space-x-2">
                 <Button
+                    variant="ghost"
                     size="sm"
-                    variant="outline"
                     :disabled="!canUndo"
                     @click="undo"
+                    ><Undo2 class="mr-1.5 h-4 w-4" /> Undo</Button
                 >
-                    <Undo2 class="mr-1 size-3.5" /> Undo
-                </Button>
                 <Button
+                    variant="ghost"
                     size="sm"
-                    variant="outline"
                     :disabled="!canRedo"
                     @click="redo"
+                    ><Redo2 class="mr-1.5 h-4 w-4" /> Redo</Button
                 >
-                    <Redo2 class="mr-1 size-3.5" /> Redo
-                </Button>
-                <Separator orientation="vertical" class="mx-1 h-6" />
+                <Separator orientation="vertical" class="mx-2 h-6" />
                 <Button
+                    variant="ghost"
                     size="sm"
-                    :variant="activeSide === 'front' ? 'default' : 'outline'"
                     @click="
                         activeSide = 'front';
                         selectedElementId = null;
-                        editingTextId = null;
                     "
+                    :class="{
+                        'bg-primary/10 text-primary': activeSide === 'front',
+                    }"
+                    >Front</Button
                 >
-                    <ArrowLeftRight class="mr-1.5 size-3.5" /> Front
-                </Button>
                 <Button
+                    variant="ghost"
                     size="sm"
-                    :variant="activeSide === 'back' ? 'default' : 'outline'"
                     @click="
                         activeSide = 'back';
                         selectedElementId = null;
-                        editingTextId = null;
                     "
+                    :class="{
+                        'bg-primary/10 text-primary': activeSide === 'back',
+                    }"
+                    >Back</Button
                 >
-                    <ArrowLeftRight class="mr-1.5 size-3.5" /> Back
-                </Button>
             </div>
-            <div class="flex gap-1.5">
-                <Button size="sm" variant="outline" @click="addTextElement">
-                    <Type class="mr-1 size-3" /> Text
-                </Button>
-                <Button size="sm" variant="outline" @click="addPhotoElement">
-                    <UserCircle class="mr-1 size-3" /> Photo
-                </Button>
-                <label
-                    class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors hover:bg-accent hover:text-accent-foreground"
+            <div class="flex items-center space-x-2">
+                <Button variant="outline" size="sm" @click="addTextElement"
+                    ><Type class="mr-1.5 h-4 w-4" /> Text</Button
                 >
-                    <ImagePlus class="size-3" /> BG Image
-                    <input
-                        type="file"
-                        accept="image/*"
-                        class="hidden"
-                        @change="onBackgroundImageUpload"
-                    />
-                </label>
+                <Button variant="outline" size="sm" @click="addPhotoElement"
+                    ><ImagePlus class="mr-1.5 h-4 w-4" /> Photo</Button
+                >
+                <Button
+                    variant="outline"
+                    size="sm"
+                    @click="addShapeElement('rectangle')"
+                    ><Square class="mr-1.5 h-4 w-4" /> Shape</Button
+                >
+                <Button variant="outline" size="sm" @click="addQrElement"
+                    ><QrCode class="mr-1.5 h-4 w-4" /> QR</Button
+                >
             </div>
         </div>
 
-        <div class="grid gap-4 xl:grid-cols-[1fr_300px]">
-            <div class="flex justify-center">
+        <!-- Main Workspace -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Left Sidebar: Layers & Background -->
+            <div class="z-10 flex w-72 flex-col border-r bg-muted/5">
+                <Tabs defaultValue="layers" class="flex flex-1 flex-col">
+                    <TabsList
+                        class="h-12 w-full justify-start rounded-none border-b bg-transparent px-0"
+                    >
+                        <TabsTrigger
+                            value="layers"
+                            class="h-12 flex-1 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                        >
+                            <Layers class="mr-2 h-4 w-4" /> Layers
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="background"
+                            class="h-12 flex-1 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                        >
+                            <Palette class="mr-2 h-4 w-4" /> Background
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent
+                        value="layers"
+                        class="m-0 flex-1 space-y-1 overflow-y-auto p-3"
+                    >
+                        <div
+                            v-for="el in currentSide.elements.slice().reverse()"
+                            :key="el.id"
+                            class="flex cursor-pointer items-center justify-between rounded-md border border-transparent px-2 py-2 text-sm transition-colors hover:bg-accent"
+                            :class="{
+                                'border-border bg-accent':
+                                    selectedElementId === el.id,
+                            }"
+                            @click="selectedElementId = el.id"
+                            @dblclick="
+                                el.type === 'text'
+                                    ? startEditText(el.id)
+                                    : undefined
+                            "
+                        >
+                            <span class="flex items-center gap-2 truncate">
+                                <Type
+                                    v-if="el.type === 'text'"
+                                    class="size-4 text-muted-foreground"
+                                />
+                                <UserCircle
+                                    v-else-if="el.type === 'photo'"
+                                    class="size-4 text-muted-foreground"
+                                />
+                                <Square
+                                    v-else-if="
+                                        el.type === 'shape' &&
+                                        el.shapeType === 'rectangle'
+                                    "
+                                    class="size-4 text-muted-foreground"
+                                />
+                                <Circle
+                                    v-else-if="
+                                        el.type === 'shape' &&
+                                        el.shapeType === 'circle'
+                                    "
+                                    class="size-4 text-muted-foreground"
+                                />
+                                <Minus
+                                    v-else-if="
+                                        el.type === 'shape' &&
+                                        el.shapeType === 'line'
+                                    "
+                                    class="size-4 text-muted-foreground"
+                                />
+                                <QrCode
+                                    v-else-if="el.type === 'qr'"
+                                    class="size-4 text-muted-foreground"
+                                />
+
+                                <span class="max-w-[140px] truncate">
+                                    {{
+                                        el.type === 'photo'
+                                            ? 'Photo'
+                                            : el.type === 'shape'
+                                              ? 'Shape (' + el.shapeType + ')'
+                                              : el.type === 'qr'
+                                                ? 'QR Code'
+                                                : el.content.length > 20
+                                                  ? resolveContent(
+                                                        el.content,
+                                                    ).substring(0, 20) + '...'
+                                                  : resolveContent(el.content)
+                                    }}
+                                </span>
+                            </span>
+                        </div>
+                        <div
+                            v-if="currentSide.elements.length === 0"
+                            class="py-8 text-center text-xs text-muted-foreground"
+                        >
+                            No elements on this side
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent
+                        value="background"
+                        class="m-0 flex-1 space-y-5 overflow-y-auto p-4"
+                    >
+                        <div class="flex rounded-lg bg-muted p-1">
+                            <Button
+                                size="sm"
+                                :variant="
+                                    currentSide.background.type === 'solid'
+                                        ? 'default'
+                                        : 'ghost'
+                                "
+                                class="h-8 flex-1"
+                                @click="
+                                    updateConfig((c) => {
+                                        c[activeSide].background.type = 'solid';
+                                    })
+                                "
+                                >Solid</Button
+                            >
+                            <Button
+                                size="sm"
+                                :variant="
+                                    currentSide.background.type === 'gradient'
+                                        ? 'default'
+                                        : 'ghost'
+                                "
+                                class="h-8 flex-1"
+                                @click="
+                                    updateConfig((c) => {
+                                        c[activeSide].background.type =
+                                            'gradient';
+                                    })
+                                "
+                                >Gradient</Button
+                            >
+                            <Button
+                                size="sm"
+                                :variant="
+                                    currentSide.background.type === 'image'
+                                        ? 'default'
+                                        : 'ghost'
+                                "
+                                class="h-8 flex-1"
+                                @click="
+                                    updateConfig((c) => {
+                                        c[activeSide].background.type = 'image';
+                                    })
+                                "
+                                >Image</Button
+                            >
+                        </div>
+
+                        <div
+                            v-if="currentSide.background.type === 'solid'"
+                            class="space-y-2"
+                        >
+                            <Label class="text-sm">Color</Label>
+                            <div class="flex items-center gap-2">
+                                <input
+                                    type="color"
+                                    :value="currentSide.background.solidColor"
+                                    @input="
+                                        updateConfig((c) => {
+                                            c[
+                                                activeSide
+                                            ].background.solidColor = (
+                                                $event.target as HTMLInputElement
+                                            ).value;
+                                        })
+                                    "
+                                    class="size-9 cursor-pointer rounded-md border p-1"
+                                />
+                                <Input
+                                    :value="currentSide.background.solidColor"
+                                    @input="
+                                        updateConfig((c) => {
+                                            c[
+                                                activeSide
+                                            ].background.solidColor = (
+                                                $event.target as HTMLInputElement
+                                            ).value;
+                                        })
+                                    "
+                                    class="font-mono text-sm uppercase"
+                                />
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="currentSide.background.type === 'gradient'"
+                            class="space-y-4"
+                        >
+                            <div class="space-y-2">
+                                <Label class="text-sm">Start Color</Label>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        :value="
+                                            currentSide.background.gradientStart
+                                        "
+                                        @input="
+                                            updateConfig((c) => {
+                                                c[
+                                                    activeSide
+                                                ].background.gradientStart = (
+                                                    $event.target as HTMLInputElement
+                                                ).value;
+                                            })
+                                        "
+                                        class="size-9 cursor-pointer rounded-md border p-1"
+                                    />
+                                    <Input
+                                        :value="
+                                            currentSide.background.gradientStart
+                                        "
+                                        @input="
+                                            updateConfig((c) => {
+                                                c[
+                                                    activeSide
+                                                ].background.gradientStart = (
+                                                    $event.target as HTMLInputElement
+                                                ).value;
+                                            })
+                                        "
+                                        class="font-mono text-sm uppercase"
+                                    />
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <Label class="text-sm">End Color</Label>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        :value="
+                                            currentSide.background.gradientEnd
+                                        "
+                                        @input="
+                                            updateConfig((c) => {
+                                                c[
+                                                    activeSide
+                                                ].background.gradientEnd = (
+                                                    $event.target as HTMLInputElement
+                                                ).value;
+                                            })
+                                        "
+                                        class="size-9 cursor-pointer rounded-md border p-1"
+                                    />
+                                    <Input
+                                        :value="
+                                            currentSide.background.gradientEnd
+                                        "
+                                        @input="
+                                            updateConfig((c) => {
+                                                c[
+                                                    activeSide
+                                                ].background.gradientEnd = (
+                                                    $event.target as HTMLInputElement
+                                                ).value;
+                                            })
+                                        "
+                                        class="font-mono text-sm uppercase"
+                                    />
+                                </div>
+                            </div>
+                            <div class="space-y-2">
+                                <Label class="text-sm"
+                                    >Angle ({{
+                                        currentSide.background.gradientAngle
+                                    }}&deg;)</Label
+                                >
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="360"
+                                    :value="
+                                        currentSide.background.gradientAngle
+                                    "
+                                    @input="
+                                        updateConfig((c) => {
+                                            c[
+                                                activeSide
+                                            ].background.gradientAngle = (
+                                                $event.target as HTMLInputElement
+                                            ).value;
+                                        })
+                                    "
+                                    class="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        <div
+                            v-if="currentSide.background.type === 'image'"
+                            class="space-y-4"
+                        >
+                            <div
+                                v-if="currentSide.background.imageBase64"
+                                class="space-y-2"
+                            >
+                                <div
+                                    class="group relative aspect-[320/510] w-full overflow-hidden rounded-md border shadow-sm"
+                                >
+                                    <img
+                                        :src="
+                                            currentSide.background.imageBase64
+                                        "
+                                        class="h-full w-full object-cover"
+                                    />
+                                    <div
+                                        class="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition-opacity group-hover:opacity-100"
+                                    >
+                                        <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            @click="
+                                                updateConfig((c) => {
+                                                    c[
+                                                        activeSide
+                                                    ].background.imageBase64 =
+                                                        null;
+                                                    c[
+                                                        activeSide
+                                                    ].background.type = 'solid';
+                                                })
+                                            "
+                                        >
+                                            <Trash2 class="mr-2 h-4 w-4" />
+                                            Remove Image
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else>
+                                <label
+                                    class="flex h-32 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed bg-muted/50 transition-colors hover:bg-muted"
+                                >
+                                    <div
+                                        class="flex flex-col items-center justify-center pt-5 pb-6"
+                                    >
+                                        <ImagePlus
+                                            class="mb-3 h-8 w-8 text-muted-foreground"
+                                        />
+                                        <p class="mb-1 text-sm font-semibold">
+                                            Click to upload
+                                        </p>
+                                        <p
+                                            class="text-xs text-muted-foreground"
+                                        >
+                                            PNG, JPG or SVG
+                                        </p>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        class="hidden"
+                                        @change="onBackgroundImageUpload"
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                    </TabsContent>
+                </Tabs>
+            </div>
+
+            <!-- Canvas Area -->
+            <div
+                class="relative flex flex-1 items-center justify-center overflow-hidden bg-[radial-gradient(circle,#e5e7eb_1px,transparent_1px)] bg-[size:20px_20px] dark:bg-[radial-gradient(circle,#374151_1px,transparent_1px)]"
+                @click.self="onCanvasClick"
+            >
                 <div
                     ref="canvasRef"
-                    class="relative cursor-crosshair overflow-hidden rounded-lg shadow-2xl ring-1 ring-black/10 select-none"
+                    class="relative origin-center bg-white shadow-2xl ring-1 ring-black/10 transition-transform duration-200 select-none"
                     :style="{
                         width: CARD_WIDTH + 'px',
                         height: CARD_HEIGHT + 'px',
+                        transform: `scale(${zoom / 100})`,
                         ...getBackgroundStyle(currentSide.background),
                     }"
-                    @click="onCanvasClick"
+                    @click.self="onCanvasClick"
                 >
+                    <!-- Snap Lines -->
                     <div
                         v-for="line in snapLines"
                         :key="line.type + line.pos"
@@ -866,22 +1400,21 @@ onUnmounted(() => {
                         "
                     />
 
+                    <!-- Elements -->
                     <div
                         v-for="el in currentSide.elements"
                         :key="el.id"
                         class="group absolute"
                         :class="{
-                            'z-10': selectedElementId === el.id,
-                            'z-0': selectedElementId !== el.id,
+                            'z-50': selectedElementId === el.id,
+                            'z-10': selectedElementId !== el.id,
                         }"
                         :style="{
                             left: el.x + '%',
                             top: el.y + '%',
                             transform:
                                 'translate(-50%, -50%)' +
-                                (el.type === 'text' &&
-                                'rotation' in el &&
-                                el.rotation
+                                (el.rotation
                                     ? ` rotate(${el.rotation}deg)`
                                     : ''),
                         }"
@@ -894,11 +1427,11 @@ onUnmounted(() => {
                     >
                         <div
                             v-if="el.type === 'photo'"
-                            class="relative flex items-center justify-center overflow-hidden"
+                            class="relative flex items-center justify-center overflow-hidden bg-muted/50"
                             :class="
                                 selectedElementId === el.id
-                                    ? 'ring-2 ring-blue-500 ring-offset-1'
-                                    : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-1'
+                                    ? 'ring-2 ring-blue-500 ring-offset-0'
+                                    : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-0'
                             "
                             :style="{
                                 width: (el.width / 100) * CARD_WIDTH + 'px',
@@ -913,34 +1446,124 @@ onUnmounted(() => {
                             <img
                                 v-if="photoUrl"
                                 :src="photoUrl"
-                                alt=""
-                                class="size-full object-cover"
+                                class="pointer-events-none size-full object-cover"
                                 :style="{
                                     borderRadius: el.borderRadius + 'px',
                                 }"
                             />
-                            <UserCircle v-else class="size-8 text-white/60" />
+                            <UserCircle
+                                v-else
+                                class="size-10 text-muted-foreground/60"
+                            />
+
                             <template v-if="selectedElementId === el.id">
                                 <div
-                                    class="absolute top-0 left-0 size-3 -translate-x-1/2 -translate-y-1/2 cursor-nw-resize rounded-full border-2 border-white bg-blue-500 shadow-lg transition-transform hover:scale-125"
+                                    class="absolute top-0 left-0 size-3 -translate-x-1/2 -translate-y-1/2 cursor-nw-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
                                     @mousedown.stop="
                                         onResizeMouseDown($event, el.id, 'nw')
                                     "
                                 />
                                 <div
-                                    class="absolute top-0 right-0 size-3 translate-x-1/2 -translate-y-1/2 cursor-ne-resize rounded-full border-2 border-white bg-blue-500 shadow-lg transition-transform hover:scale-125"
+                                    class="absolute top-0 right-0 size-3 translate-x-1/2 -translate-y-1/2 cursor-ne-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
                                     @mousedown.stop="
                                         onResizeMouseDown($event, el.id, 'ne')
                                     "
                                 />
                                 <div
-                                    class="absolute bottom-0 left-0 size-3 -translate-x-1/2 translate-y-1/2 cursor-sw-resize rounded-full border-2 border-white bg-blue-500 shadow-lg transition-transform hover:scale-125"
+                                    class="absolute bottom-0 left-0 size-3 -translate-x-1/2 translate-y-1/2 cursor-sw-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
                                     @mousedown.stop="
                                         onResizeMouseDown($event, el.id, 'sw')
                                     "
                                 />
                                 <div
-                                    class="absolute right-0 bottom-0 size-3 translate-x-1/2 translate-y-1/2 cursor-se-resize rounded-full border-2 border-white bg-blue-500 shadow-lg transition-transform hover:scale-125"
+                                    class="absolute right-0 bottom-0 size-3 translate-x-1/2 translate-y-1/2 cursor-se-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'se')
+                                    "
+                                />
+                            </template>
+                        </div>
+
+                        <div
+                            v-else-if="el.type === 'shape'"
+                            class="relative flex items-center justify-center overflow-visible"
+                            :class="
+                                selectedElementId === el.id
+                                    ? 'ring-2 ring-blue-500 ring-offset-0'
+                                    : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-0'
+                            "
+                            :style="{
+                                width: (el.width / 100) * CARD_WIDTH + 'px',
+                                height: (el.height / 100) * CARD_HEIGHT + 'px',
+                                opacity: (el.opacity ?? 100) / 100,
+                            }"
+                        >
+                            <div
+                                class="pointer-events-none h-full w-full"
+                                :style="{
+                                    backgroundColor: el.backgroundColor,
+                                    borderRadius:
+                                        el.shapeType === 'circle'
+                                            ? '50%'
+                                            : el.borderRadius + 'px',
+                                    border: el.borderWidth
+                                        ? `${el.borderWidth}px solid ${el.borderColor}`
+                                        : 'none',
+                                }"
+                            />
+
+                            <template v-if="selectedElementId === el.id">
+                                <div
+                                    class="absolute top-0 left-0 size-3 -translate-x-1/2 -translate-y-1/2 cursor-nw-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'nw')
+                                    "
+                                />
+                                <div
+                                    class="absolute top-0 right-0 size-3 translate-x-1/2 -translate-y-1/2 cursor-ne-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'ne')
+                                    "
+                                />
+                                <div
+                                    class="absolute bottom-0 left-0 size-3 -translate-x-1/2 translate-y-1/2 cursor-sw-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'sw')
+                                    "
+                                />
+                                <div
+                                    class="absolute right-0 bottom-0 size-3 translate-x-1/2 translate-y-1/2 cursor-se-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'se')
+                                    "
+                                />
+                            </template>
+                        </div>
+
+                        <div
+                            v-else-if="el.type === 'qr'"
+                            class="relative flex items-center justify-center overflow-visible"
+                            :class="
+                                selectedElementId === el.id
+                                    ? 'ring-2 ring-blue-500 ring-offset-0'
+                                    : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-0'
+                            "
+                            :style="{
+                                width: (el.size / 100) * CARD_WIDTH + 'px',
+                                height: (el.size / 100) * CARD_WIDTH + 'px',
+                                opacity: (el.opacity ?? 100) / 100,
+                                backgroundColor: el.backgroundColor,
+                                padding: '4px',
+                            }"
+                        >
+                            <QrCode
+                                class="pointer-events-none h-full w-full"
+                                :style="{ color: el.color }"
+                            />
+
+                            <template v-if="selectedElementId === el.id">
+                                <div
+                                    class="absolute right-0 bottom-0 size-3 translate-x-1/2 translate-y-1/2 cursor-se-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
                                     @mousedown.stop="
                                         onResizeMouseDown($event, el.id, 'se')
                                     "
@@ -950,14 +1573,15 @@ onUnmounted(() => {
 
                         <div
                             v-else-if="el.type === 'text'"
-                            class="relative cursor-move rounded-sm transition-shadow"
+                            class="relative cursor-move transition-shadow"
                             :class="
                                 selectedElementId === el.id
-                                    ? 'shadow-lg ring-2 ring-blue-500 ring-offset-1'
+                                    ? 'ring-2 ring-blue-500 ring-offset-0'
                                     : 'hover:ring-1 hover:ring-blue-300'
                             "
                             :style="{
                                 fontSize: el.fontSize + 'px',
+                                fontFamily: el.fontFamily,
                                 fontWeight: el.fontWeight,
                                 color: el.color,
                                 textAlign: el.textAlign,
@@ -977,6 +1601,7 @@ onUnmounted(() => {
                                 class="min-w-[30px] rounded-sm ring-2 ring-blue-400 outline-none"
                                 :style="{
                                     fontSize: el.fontSize + 'px',
+                                    fontFamily: el.fontFamily,
                                     fontWeight: el.fontWeight,
                                     color: el.color,
                                     textAlign: el.textAlign,
@@ -992,549 +1617,111 @@ onUnmounted(() => {
                                 @keydown.enter.prevent="finishEditText"
                                 v-text="el.content"
                             />
-                            <template v-else>
-                                {{ resolveContent(el.content) }}
-                            </template>
-
-                            <div
-                                v-if="
-                                    selectedElementId === el.id &&
-                                    editingTextId !== el.id
-                                "
-                                class="pointer-events-none absolute -top-1 left-1/2 -translate-x-1/2 -translate-y-full rounded bg-blue-500 px-1.5 py-0.5 text-[9px] whitespace-nowrap text-white shadow"
-                            >
-                                {{ el.fontSize }}px &middot; {{ el.fontWeight }}
-                            </div>
+                            <template v-else>{{
+                                resolveContent(el.content)
+                            }}</template>
                         </div>
                     </div>
+                </div>
 
-                    <div
-                        v-if="!currentSide.elements.length"
-                        class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/40"
+                <div
+                    class="absolute right-4 bottom-4 z-10 flex items-center rounded-lg border bg-background/90 px-2 py-1 shadow-lg backdrop-blur-sm"
+                >
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-8 w-8 rounded-md"
+                        @click="zoomOut"
+                        ><ZoomOut class="h-4 w-4"
+                    /></Button>
+                    <span class="w-12 text-center text-xs font-semibold"
+                        >{{ zoom }}%</span
                     >
-                        <MousePointerClick class="size-8" />
-                        <span class="text-xs"
-                            >Add elements from the toolbar</span
-                        >
-                    </div>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-8 w-8 rounded-md"
+                        @click="zoomIn"
+                        ><ZoomIn class="h-4 w-4"
+                    /></Button>
                 </div>
             </div>
 
-            <div class="space-y-3">
-                <Card>
-                    <CardHeader class="pb-3">
-                        <div class="flex items-center gap-2">
-                            <Palette class="size-4 text-muted-foreground" />
-                            <CardTitle class="text-sm">Background</CardTitle>
-                        </div>
-                    </CardHeader>
-                    <CardContent class="space-y-3">
-                        <div class="flex gap-1.5">
-                            <Button
-                                size="sm"
-                                :variant="
-                                    currentSide.background.type === 'solid'
-                                        ? 'default'
-                                        : 'outline'
-                                "
-                                class="flex-1"
-                                @click="
-                                    updateConfig((c) => {
-                                        c[activeSide].background.type = 'solid';
-                                    })
-                                "
-                                >Solid</Button
-                            >
-                            <Button
-                                size="sm"
-                                :variant="
-                                    currentSide.background.type === 'gradient'
-                                        ? 'default'
-                                        : 'outline'
-                                "
-                                class="flex-1"
-                                @click="
-                                    updateConfig((c) => {
-                                        c[activeSide].background.type =
-                                            'gradient';
-                                    })
-                                "
-                                >Gradient</Button
-                            >
-                            <label
-                                class="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-medium ring-offset-background transition-colors"
-                                :class="
-                                    currentSide.background.type === 'image'
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'hover:bg-accent hover:text-accent-foreground'
-                                "
-                            >
-                                <ImagePlus class="size-3" /> Image
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    class="hidden"
-                                    @change="onBackgroundImageUpload"
-                                />
-                            </label>
-                        </div>
-                        <div
-                            v-if="currentSide.background.type === 'solid'"
-                            class="space-y-1.5"
-                        >
-                            <Label class="text-xs">Color</Label>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    :value="currentSide.background.solidColor"
-                                    @input="
-                                        updateConfig((c) => {
-                                            c[
-                                                activeSide
-                                            ].background.solidColor = (
-                                                $event.target as HTMLInputElement
-                                            ).value;
-                                        })
-                                    "
-                                    class="size-8 cursor-pointer rounded border"
-                                />
-                                <Input
-                                    :value="currentSide.background.solidColor"
-                                    @input="
-                                        updateConfig((c) => {
-                                            c[
-                                                activeSide
-                                            ].background.solidColor = (
-                                                $event.target as HTMLInputElement
-                                            ).value;
-                                        })
-                                    "
-                                    class="h-8 flex-1 font-mono text-xs"
-                                />
-                            </div>
-                        </div>
-                        <div
-                            v-if="currentSide.background.type === 'gradient'"
-                            class="space-y-2"
-                        >
-                            <Label class="text-xs">Start Color</Label>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    :value="
-                                        currentSide.background.gradientStart
-                                    "
-                                    @input="
-                                        updateConfig((c) => {
-                                            c[
-                                                activeSide
-                                            ].background.gradientStart = (
-                                                $event.target as HTMLInputElement
-                                            ).value;
-                                        })
-                                    "
-                                    class="size-8 cursor-pointer rounded border"
-                                />
-                                <Input
-                                    :value="
-                                        currentSide.background.gradientStart
-                                    "
-                                    @input="
-                                        updateConfig((c) => {
-                                            c[
-                                                activeSide
-                                            ].background.gradientStart = (
-                                                $event.target as HTMLInputElement
-                                            ).value;
-                                        })
-                                    "
-                                    class="h-8 flex-1 font-mono text-xs"
-                                />
-                            </div>
-                            <Label class="text-xs">End Color</Label>
-                            <div class="flex items-center gap-2">
-                                <input
-                                    type="color"
-                                    :value="currentSide.background.gradientEnd"
-                                    @input="
-                                        updateConfig((c) => {
-                                            c[
-                                                activeSide
-                                            ].background.gradientEnd = (
-                                                $event.target as HTMLInputElement
-                                            ).value;
-                                        })
-                                    "
-                                    class="size-8 cursor-pointer rounded border"
-                                />
-                                <Input
-                                    :value="currentSide.background.gradientEnd"
-                                    @input="
-                                        updateConfig((c) => {
-                                            c[
-                                                activeSide
-                                            ].background.gradientEnd = (
-                                                $event.target as HTMLInputElement
-                                            ).value;
-                                        })
-                                    "
-                                    class="h-8 flex-1 font-mono text-xs"
-                                />
-                            </div>
-                            <Label class="text-xs"
-                                >Angle:
-                                {{
-                                    currentSide.background.gradientAngle
-                                }}&deg;</Label
-                            >
-                            <input
-                                type="range"
-                                min="0"
-                                max="360"
-                                :value="currentSide.background.gradientAngle"
-                                @input="
-                                    updateConfig((c) => {
-                                        c[activeSide].background.gradientAngle =
-                                            (
-                                                $event.target as HTMLInputElement
-                                            ).value;
-                                    })
-                                "
-                                class="w-full"
-                            />
-                        </div>
-                        <div
-                            v-if="
-                                currentSide.background.type === 'image' &&
-                                currentSide.background.imageBase64
+            <!-- Right Sidebar: Properties -->
+            <div
+                class="z-10 flex w-80 flex-col overflow-hidden border-l bg-muted/5 shadow-[-4px_0_15px_rgba(0,0,0,0.03)]"
+            >
+                <div
+                    class="flex h-12 items-center justify-between border-b bg-background p-3"
+                >
+                    <h3 class="flex items-center text-sm font-semibold">
+                        <Settings2 class="mr-2 h-4 w-4 text-primary" />
+                        Properties
+                    </h3>
+                    <div
+                        class="flex items-center gap-0.5"
+                        v-if="selectedElement"
+                    >
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7"
+                            @click="moveElementOrder(selectedElementId!, 'up')"
+                            title="Bring Forward"
+                            ><MoveUp class="h-3.5 w-3.5"
+                        /></Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7"
+                            @click="
+                                moveElementOrder(selectedElementId!, 'down')
                             "
-                            class="space-y-2"
+                            title="Send Backward"
+                            ><MoveDown class="h-3.5 w-3.5"
+                        /></Button>
+                        <Separator orientation="vertical" class="mx-1 h-4" />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7"
+                            @click="duplicateElement(selectedElementId!)"
+                            title="Duplicate"
+                            ><Copy class="h-3.5 w-3.5"
+                        /></Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            class="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            @click="deleteElement(selectedElementId!)"
+                            title="Delete"
+                            ><Trash2 class="h-3.5 w-3.5"
+                        /></Button>
+                    </div>
+                </div>
+
+                <div
+                    class="flex-1 space-y-6 overflow-y-auto p-4"
+                    v-if="selectedElement"
+                >
+                    <!-- POSITION & OPACITY (COMMON FOR ALL) -->
+                    <div class="space-y-4">
+                        <h4
+                            class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
                         >
-                            <div class="flex items-center gap-2">
-                                <div
-                                    class="size-12 overflow-hidden rounded border"
+                            Layout
+                        </h4>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >X Position (%)</Label
                                 >
-                                    <img
-                                        :src="
-                                            currentSide.background.imageBase64!
-                                        "
-                                        class="size-full object-cover"
-                                    />
-                                </div>
-                                <Button
-                                    size="sm"
-                                    variant="destructive"
-                                    @click="
-                                        updateConfig((c) => {
-                                            c[
-                                                activeSide
-                                            ].background.imageBase64 = null;
-                                            c[activeSide].background.type =
-                                                'solid';
-                                        })
-                                    "
-                                >
-                                    <Trash2 class="mr-1 size-3" /> Remove
-                                </Button>
-                            </div>
-                        </div>
-                        <div
-                            v-if="
-                                currentSide.background.type === 'image' &&
-                                !currentSide.background.imageBase64
-                            "
-                        >
-                            <p class="text-xs text-muted-foreground">
-                                Upload an image using the toolbar or the Image
-                                button above.
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card v-if="selectedTextElement">
-                    <CardHeader class="pb-3">
-                        <div class="flex items-center justify-between">
-                            <CardTitle
-                                class="flex items-center gap-1.5 text-sm"
-                            >
-                                <Type class="size-3.5" />
-                                Text Properties
-                            </CardTitle>
-                            <div class="flex items-center gap-1">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6"
-                                    title="Duplicate"
-                                    @click="
-                                        duplicateElement(selectedElementId!)
-                                    "
-                                    ><Copy class="size-3"
-                                /></Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6"
-                                    title="Move Up"
-                                    @click="
-                                        moveElementOrder(
-                                            selectedElementId!,
-                                            'up',
-                                        )
-                                    "
-                                    ><ChevronUp class="size-3"
-                                /></Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6"
-                                    title="Move Down"
-                                    @click="
-                                        moveElementOrder(
-                                            selectedElementId!,
-                                            'down',
-                                        )
-                                    "
-                                    ><ChevronDown class="size-3"
-                                /></Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6 text-destructive"
-                                    @click="deleteElement(selectedElementId!)"
-                                    ><Trash2 class="size-3"
-                                /></Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent class="space-y-3">
-                        <div class="space-y-1.5">
-                            <Label class="text-xs">Content</Label>
-                            <Input
-                                :value="selectedTextElement.content"
-                                @input="
-                                    updateTextProp(
-                                        'content',
-                                        ($event.target as HTMLInputElement)
-                                            .value,
-                                    )
-                                "
-                            />
-                            <div class="flex flex-wrap gap-1">
-                                <button
-                                    v-for="field in DYNAMIC_FIELDS"
-                                    :key="field.value"
-                                    class="rounded-md border px-1.5 py-0.5 text-[10px] transition-colors hover:bg-primary hover:text-primary-foreground"
-                                    :class="
-                                        selectedTextElement.content ===
-                                        field.value
-                                            ? 'bg-primary text-primary-foreground'
-                                            : ''
-                                    "
-                                    @click="insertField(field.value)"
-                                >
-                                    {{ field.label }}
-                                </button>
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div class="space-y-1.5">
-                            <Label class="text-xs font-medium"
-                                >Typography</Label
-                            >
-                            <div class="grid grid-cols-2 gap-2">
-                                <div class="space-y-1">
-                                    <Label
-                                        class="text-[10px] text-muted-foreground"
-                                        >Size:
-                                        {{
-                                            selectedTextElement.fontSize
-                                        }}px</Label
-                                    >
-                                    <input
-                                        type="range"
-                                        min="4"
-                                        max="32"
-                                        :value="selectedTextElement.fontSize"
-                                        @input="
-                                            updateTextProp(
-                                                'fontSize',
-                                                parseInt(
-                                                    (
-                                                        $event.target as HTMLInputElement
-                                                    ).value,
-                                                ),
-                                            )
-                                        "
-                                        class="w-full"
-                                    />
-                                </div>
-                                <div class="space-y-1">
-                                    <Label
-                                        class="text-[10px] text-muted-foreground"
-                                        >Color</Label
-                                    >
-                                    <div class="flex items-center gap-1.5">
-                                        <input
-                                            type="color"
-                                            :value="selectedTextElement.color"
-                                            @input="
-                                                updateTextProp(
-                                                    'color',
-                                                    (
-                                                        $event.target as HTMLInputElement
-                                                    ).value,
-                                                )
-                                            "
-                                            class="size-7 cursor-pointer rounded border"
-                                        />
-                                        <Input
-                                            :value="selectedTextElement.color"
-                                            @input="
-                                                updateTextProp(
-                                                    'color',
-                                                    (
-                                                        $event.target as HTMLInputElement
-                                                    ).value,
-                                                )
-                                            "
-                                            class="h-7 flex-1 font-mono text-[10px]"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="space-y-1.5">
-                            <Label class="text-[10px] text-muted-foreground"
-                                >Alignment &amp; Style</Label
-                            >
-                            <div class="flex gap-1">
-                                <Button
-                                    size="sm"
-                                    :variant="
-                                        selectedTextElement.fontWeight ===
-                                        'bold'
-                                            ? 'default'
-                                            : 'outline'
-                                    "
-                                    class="flex-1"
-                                    @click="
-                                        updateTextProp(
-                                            'fontWeight',
-                                            selectedTextElement.fontWeight ===
-                                                'bold'
-                                                ? 'normal'
-                                                : 'bold',
-                                        )
-                                    "
-                                >
-                                    <Bold class="mr-1 size-3" />
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    :variant="
-                                        selectedTextElement.textAlign === 'left'
-                                            ? 'default'
-                                            : 'outline'
-                                    "
-                                    class="flex-1"
-                                    @click="updateTextProp('textAlign', 'left')"
-                                >
-                                    <AlignLeft class="size-3" />
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    :variant="
-                                        selectedTextElement.textAlign ===
-                                        'center'
-                                            ? 'default'
-                                            : 'outline'
-                                    "
-                                    class="flex-1"
-                                    @click="
-                                        updateTextProp('textAlign', 'center')
-                                    "
-                                >
-                                    <AlignCenter class="size-3" />
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    :variant="
-                                        selectedTextElement.textAlign ===
-                                        'right'
-                                            ? 'default'
-                                            : 'outline'
-                                    "
-                                    class="flex-1"
-                                    @click="
-                                        updateTextProp('textAlign', 'right')
-                                    "
-                                >
-                                    <AlignRight class="size-3" />
-                                </Button>
-                            </div>
-                            <div class="flex gap-1">
-                                <Button
-                                    size="sm"
-                                    :variant="
-                                        selectedTextElement.textTransform ===
-                                        'none'
-                                            ? 'default'
-                                            : 'outline'
-                                    "
-                                    class="flex-1"
-                                    @click="
-                                        updateTextProp('textTransform', 'none')
-                                    "
-                                >
-                                    <CaseSensitive class="mr-1 size-3" /> Aa
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    :variant="
-                                        selectedTextElement.textTransform ===
-                                        'uppercase'
-                                            ? 'default'
-                                            : 'outline'
-                                    "
-                                    class="flex-1"
-                                    @click="
-                                        updateTextProp(
-                                            'textTransform',
-                                            'uppercase',
-                                        )
-                                    "
-                                >
-                                    AA
-                                </Button>
-                            </div>
-                        </div>
-
-                        <Separator />
-
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="space-y-1">
-                                <Label class="text-[10px] text-muted-foreground"
-                                    >Spacing:
-                                    {{
-                                        selectedTextElement.letterSpacing ?? 0
-                                    }}px</Label
-                                >
-                                <input
-                                    type="range"
-                                    min="-2"
-                                    max="8"
-                                    step="0.5"
-                                    :value="
-                                        selectedTextElement.letterSpacing ?? 0
-                                    "
+                                <Input
+                                    type="number"
+                                    :value="Math.round(selectedElement.x)"
                                     @input="
-                                        updateTextProp(
-                                            'letterSpacing',
+                                        updateSelectedProp(
+                                            'x',
                                             parseFloat(
                                                 (
                                                     $event.target as HTMLInputElement
@@ -1542,30 +1729,19 @@ onUnmounted(() => {
                                             ),
                                         )
                                     "
-                                    class="w-full"
+                                    class="h-8 text-sm"
                                 />
                             </div>
-                            <div class="space-y-1">
-                                <Label class="text-[10px] text-muted-foreground"
-                                    >Line Height:
-                                    {{
-                                        (
-                                            selectedTextElement.lineHeight ??
-                                            1.2
-                                        ).toFixed(1)
-                                    }}</Label
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >Y Position (%)</Label
                                 >
-                                <input
-                                    type="range"
-                                    min="0.8"
-                                    max="2"
-                                    step="0.1"
-                                    :value="
-                                        selectedTextElement.lineHeight ?? 1.2
-                                    "
+                                <Input
+                                    type="number"
+                                    :value="Math.round(selectedElement.y)"
                                     @input="
-                                        updateTextProp(
-                                            'lineHeight',
+                                        updateSelectedProp(
+                                            'y',
                                             parseFloat(
                                                 (
                                                     $event.target as HTMLInputElement
@@ -1573,27 +1749,27 @@ onUnmounted(() => {
                                             ),
                                         )
                                     "
-                                    class="w-full"
+                                    class="h-8 text-sm"
                                 />
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="space-y-1">
-                                <Label class="text-[10px] text-muted-foreground"
-                                    >Opacity:
-                                    {{
-                                        selectedTextElement.opacity ?? 100
-                                    }}%</Label
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1.5">
+                                <Label
+                                    class="flex justify-between text-xs text-muted-foreground"
+                                    >Opacity
+                                    <span
+                                        >{{ selectedElement.opacity }}%</span
+                                    ></Label
                                 >
                                 <input
                                     type="range"
-                                    min="10"
+                                    min="0"
                                     max="100"
-                                    step="5"
-                                    :value="selectedTextElement.opacity ?? 100"
+                                    :value="selectedElement.opacity"
                                     @input="
-                                        updateTextProp(
+                                        updateSelectedProp(
                                             'opacity',
                                             parseInt(
                                                 (
@@ -1605,20 +1781,23 @@ onUnmounted(() => {
                                     class="w-full"
                                 />
                             </div>
-                            <div class="space-y-1">
-                                <Label class="text-[10px] text-muted-foreground"
-                                    >Rotation:
-                                    {{
-                                        selectedTextElement.rotation ?? 0
-                                    }}&deg;</Label
+                            <div class="space-y-1.5">
+                                <Label
+                                    class="flex justify-between text-xs text-muted-foreground"
+                                    >Rotation
+                                    <span
+                                        >{{
+                                            selectedElement.rotation
+                                        }}&deg;</span
+                                    ></Label
                                 >
                                 <input
                                     type="range"
                                     min="-180"
                                     max="180"
-                                    :value="selectedTextElement.rotation ?? 0"
+                                    :value="selectedElement.rotation"
                                     @input="
-                                        updateTextProp(
+                                        updateSelectedProp(
                                             'rotation',
                                             parseInt(
                                                 (
@@ -1631,179 +1810,435 @@ onUnmounted(() => {
                                 />
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
 
-                <Card v-else-if="selectedPhotoElement">
-                    <CardHeader class="pb-3">
-                        <div class="flex items-center justify-between">
-                            <CardTitle
-                                class="flex items-center gap-1.5 text-sm"
+                    <Separator />
+
+                    <!-- TEXT PROPERTIES -->
+                    <template v-if="selectedElement.type === 'text'">
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
                             >
-                                <UserCircle class="size-3.5" />
-                                Photo Properties
-                            </CardTitle>
-                            <div class="flex items-center gap-1">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6"
-                                    title="Duplicate"
-                                    @click="
-                                        duplicateElement(selectedElementId!)
-                                    "
-                                    ><Copy class="size-3"
-                                /></Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6"
-                                    title="Move Up"
-                                    @click="
-                                        moveElementOrder(
-                                            selectedElementId!,
-                                            'up',
-                                        )
-                                    "
-                                    ><ChevronUp class="size-3"
-                                /></Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6"
-                                    title="Move Down"
-                                    @click="
-                                        moveElementOrder(
-                                            selectedElementId!,
-                                            'down',
-                                        )
-                                    "
-                                    ><ChevronDown class="size-3"
-                                /></Button>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    class="size-6 text-destructive"
-                                    @click="deleteElement(selectedElementId!)"
-                                    ><Trash2 class="size-3"
-                                /></Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent class="space-y-3">
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="space-y-1">
-                                <Label class="text-xs"
-                                    >Width:
-                                    {{ selectedPhotoElement.width }}%</Label
-                                >
-                                <input
-                                    type="range"
-                                    min="5"
-                                    max="50"
-                                    :value="selectedPhotoElement.width"
+                                Text Content
+                            </h4>
+                            <div class="space-y-1.5">
+                                <Input
+                                    :value="selectedElement.content"
                                     @input="
-                                        updatePhotoProp(
-                                            'width',
-                                            parseInt(
-                                                (
-                                                    $event.target as HTMLInputElement
-                                                ).value,
-                                            ),
-                                        )
-                                    "
-                                    class="w-full"
-                                />
-                            </div>
-                            <div class="space-y-1">
-                                <Label class="text-xs"
-                                    >Height:
-                                    {{ selectedPhotoElement.height }}%</Label
-                                >
-                                <input
-                                    type="range"
-                                    min="5"
-                                    max="50"
-                                    :value="selectedPhotoElement.height"
-                                    @input="
-                                        updatePhotoProp(
-                                            'height',
-                                            parseInt(
-                                                (
-                                                    $event.target as HTMLInputElement
-                                                ).value,
-                                            ),
-                                        )
-                                    "
-                                    class="w-full"
-                                />
-                            </div>
-                        </div>
-                        <div class="space-y-1">
-                            <Label class="text-xs"
-                                >Corner Radius:
-                                {{ selectedPhotoElement.borderRadius }}px</Label
-                            >
-                            <input
-                                type="range"
-                                min="0"
-                                max="50"
-                                :value="selectedPhotoElement.borderRadius"
-                                @input="
-                                    updatePhotoProp(
-                                        'borderRadius',
-                                        parseInt(
+                                        updateSelectedProp(
+                                            'content',
                                             ($event.target as HTMLInputElement)
                                                 .value,
-                                        ),
-                                    )
-                                "
-                                class="w-full"
-                            />
-                        </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="space-y-1">
-                                <Label class="text-xs"
-                                    >Opacity:
-                                    {{
-                                        selectedPhotoElement.opacity ?? 100
-                                    }}%</Label
-                                >
-                                <input
-                                    type="range"
-                                    min="10"
-                                    max="100"
-                                    step="5"
-                                    :value="selectedPhotoElement.opacity ?? 100"
-                                    @input="
-                                        updatePhotoProp(
-                                            'opacity',
-                                            parseInt(
-                                                (
-                                                    $event.target as HTMLInputElement
-                                                ).value,
-                                            ),
                                         )
                                     "
-                                    class="w-full"
                                 />
                             </div>
-                            <div class="space-y-1">
-                                <Label class="text-xs"
-                                    >Border:
-                                    {{
-                                        selectedPhotoElement.borderWidth ?? 0
-                                    }}px</Label
+                            <div class="flex flex-wrap gap-1.5">
+                                <button
+                                    v-for="field in DYNAMIC_FIELDS"
+                                    :key="field.value"
+                                    class="rounded border px-2 py-1 text-[10px] font-medium transition-colors hover:bg-primary hover:text-primary-foreground"
+                                    :class="
+                                        selectedElement.content === field.value
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'bg-background text-muted-foreground'
+                                    "
+                                    @click="
+                                        updateSelectedProp(
+                                            'content',
+                                            field.value,
+                                        )
+                                    "
+                                >
+                                    {{ field.label }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                Typography
+                            </h4>
+
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >Font Family</Label
+                                >
+                                <select
+                                    class="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:ring-ring focus-visible:outline-none"
+                                    :value="selectedElement.fontFamily"
+                                    @change="
+                                        updateSelectedProp(
+                                            'fontFamily',
+                                            ($event.target as HTMLSelectElement)
+                                                .value,
+                                        )
+                                    "
+                                >
+                                    <option
+                                        v-for="font in FONTS"
+                                        :key="font"
+                                        :value="font"
+                                    >
+                                        {{ font }}
+                                    </option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs text-muted-foreground"
+                                        >Font Size (px)</Label
+                                    >
+                                    <Input
+                                        type="number"
+                                        min="4"
+                                        max="72"
+                                        :value="selectedElement.fontSize"
+                                        @input="
+                                            updateSelectedProp(
+                                                'fontSize',
+                                                parseInt(
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                ),
+                                            )
+                                        "
+                                        class="h-8"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs text-muted-foreground"
+                                        >Text Color</Label
+                                    >
+                                    <div class="flex items-center gap-1.5">
+                                        <input
+                                            type="color"
+                                            :value="selectedElement.color"
+                                            @input="
+                                                updateSelectedProp(
+                                                    'color',
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                )
+                                            "
+                                            class="size-8 cursor-pointer rounded border p-0.5"
+                                        />
+                                        <Input
+                                            :value="selectedElement.color"
+                                            @input="
+                                                updateSelectedProp(
+                                                    'color',
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                )
+                                            "
+                                            class="h-8 flex-1 font-mono text-xs uppercase"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >Style & Alignment</Label
+                                >
+                                <div class="flex gap-1">
+                                    <Button
+                                        size="sm"
+                                        :variant="
+                                            selectedElement.fontWeight ===
+                                            'bold'
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                        class="h-8 flex-1"
+                                        @click="
+                                            updateSelectedProp(
+                                                'fontWeight',
+                                                selectedElement.fontWeight ===
+                                                    'bold'
+                                                    ? 'normal'
+                                                    : 'bold',
+                                            )
+                                        "
+                                        ><Bold class="h-3.5 w-3.5"
+                                    /></Button>
+                                    <Button
+                                        size="sm"
+                                        :variant="
+                                            selectedElement.textAlign === 'left'
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                        class="h-8 flex-1"
+                                        @click="
+                                            updateSelectedProp(
+                                                'textAlign',
+                                                'left',
+                                            )
+                                        "
+                                        ><AlignLeft class="h-3.5 w-3.5"
+                                    /></Button>
+                                    <Button
+                                        size="sm"
+                                        :variant="
+                                            selectedElement.textAlign ===
+                                            'center'
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                        class="h-8 flex-1"
+                                        @click="
+                                            updateSelectedProp(
+                                                'textAlign',
+                                                'center',
+                                            )
+                                        "
+                                        ><AlignCenter class="h-3.5 w-3.5"
+                                    /></Button>
+                                    <Button
+                                        size="sm"
+                                        :variant="
+                                            selectedElement.textAlign ===
+                                            'right'
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                        class="h-8 flex-1"
+                                        @click="
+                                            updateSelectedProp(
+                                                'textAlign',
+                                                'right',
+                                            )
+                                        "
+                                        ><AlignRight class="h-3.5 w-3.5"
+                                    /></Button>
+                                </div>
+                                <div class="mt-1 flex gap-1">
+                                    <Button
+                                        size="sm"
+                                        :variant="
+                                            selectedElement.textTransform ===
+                                            'none'
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                        class="h-8 flex-1"
+                                        @click="
+                                            updateSelectedProp(
+                                                'textTransform',
+                                                'none',
+                                            )
+                                        "
+                                        ><CaseSensitive
+                                            class="mr-1 h-3.5 w-3.5"
+                                        />
+                                        Aa</Button
+                                    >
+                                    <Button
+                                        size="sm"
+                                        :variant="
+                                            selectedElement.textTransform ===
+                                            'uppercase'
+                                                ? 'default'
+                                                : 'outline'
+                                        "
+                                        class="h-8 flex-1"
+                                        @click="
+                                            updateSelectedProp(
+                                                'textTransform',
+                                                'uppercase',
+                                            )
+                                        "
+                                        >AA</Button
+                                    >
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1.5">
+                                    <Label
+                                        class="flex justify-between text-xs text-muted-foreground"
+                                        >Spacing
+                                        <span
+                                            >{{
+                                                selectedElement.letterSpacing
+                                            }}px</span
+                                        ></Label
+                                    >
+                                    <input
+                                        type="range"
+                                        min="-5"
+                                        max="20"
+                                        step="0.5"
+                                        :value="selectedElement.letterSpacing"
+                                        @input="
+                                            updateSelectedProp(
+                                                'letterSpacing',
+                                                parseFloat(
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                ),
+                                            )
+                                        "
+                                        class="w-full"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label
+                                        class="flex justify-between text-xs text-muted-foreground"
+                                        >Line Height
+                                        <span>{{
+                                            selectedElement.lineHeight
+                                        }}</span></Label
+                                    >
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="3"
+                                        step="0.1"
+                                        :value="selectedElement.lineHeight"
+                                        @input="
+                                            updateSelectedProp(
+                                                'lineHeight',
+                                                parseFloat(
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                ),
+                                            )
+                                        "
+                                        class="w-full"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- PHOTO PROPERTIES -->
+                    <template v-else-if="selectedElement.type === 'photo'">
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                Dimensions
+                            </h4>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs text-muted-foreground"
+                                        >Width (%)</Label
+                                    >
+                                    <Input
+                                        type="number"
+                                        min="5"
+                                        max="100"
+                                        :value="
+                                            Math.round(selectedElement.width)
+                                        "
+                                        @input="
+                                            updateSelectedProp(
+                                                'width',
+                                                parseInt(
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                ),
+                                            )
+                                        "
+                                        class="h-8"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs text-muted-foreground"
+                                        >Height (%)</Label
+                                    >
+                                    <Input
+                                        type="number"
+                                        min="5"
+                                        max="100"
+                                        :value="
+                                            Math.round(selectedElement.height)
+                                        "
+                                        @input="
+                                            updateSelectedProp(
+                                                'height',
+                                                parseInt(
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                ),
+                                            )
+                                        "
+                                        class="h-8"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label
+                                    class="flex justify-between text-xs text-muted-foreground"
+                                    >Corner Radius
+                                    <span
+                                        >{{
+                                            selectedElement.borderRadius
+                                        }}px</span
+                                    ></Label
                                 >
                                 <input
                                     type="range"
                                     min="0"
-                                    max="5"
-                                    :value="
-                                        selectedPhotoElement.borderWidth ?? 0
-                                    "
+                                    max="100"
+                                    :value="selectedElement.borderRadius"
                                     @input="
-                                        updatePhotoProp(
+                                        updateSelectedProp(
+                                            'borderRadius',
+                                            parseInt(
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            ),
+                                        )
+                                    "
+                                    class="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                Border
+                            </h4>
+                            <div class="space-y-1.5">
+                                <Label
+                                    class="flex justify-between text-xs text-muted-foreground"
+                                    >Border Width
+                                    <span
+                                        >{{
+                                            selectedElement.borderWidth
+                                        }}px</span
+                                    ></Label
+                                >
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="10"
+                                    :value="selectedElement.borderWidth"
+                                    @input="
+                                        updateSelectedProp(
                                             'borderWidth',
                                             parseInt(
                                                 (
@@ -1815,116 +2250,486 @@ onUnmounted(() => {
                                     class="w-full"
                                 />
                             </div>
-                        </div>
-                        <div class="space-y-1">
-                            <Label class="text-xs">Border Color</Label>
-                            <div class="flex items-center gap-1.5">
-                                <input
-                                    type="color"
-                                    :value="
-                                        selectedPhotoElement.borderColor ??
-                                        '#ffffff33'
-                                    "
-                                    @input="
-                                        updatePhotoProp(
-                                            'borderColor',
-                                            ($event.target as HTMLInputElement)
-                                                .value,
-                                        )
-                                    "
-                                    class="size-7 cursor-pointer rounded border"
-                                />
-                                <Input
-                                    :value="
-                                        selectedPhotoElement.borderColor ??
-                                        '#ffffff33'
-                                    "
-                                    @input="
-                                        updatePhotoProp(
-                                            'borderColor',
-                                            ($event.target as HTMLInputElement)
-                                                .value,
-                                        )
-                                    "
-                                    class="h-7 flex-1 font-mono text-xs"
-                                />
-                            </div>
-                        </div>
-                        <p class="text-[10px] text-muted-foreground">
-                            Drag corner handles to resize. Double-click text to
-                            edit inline.
-                        </p>
-                    </CardContent>
-                </Card>
-
-                <Card v-else>
-                    <CardHeader class="pb-3">
-                        <CardTitle class="flex items-center gap-1.5 text-sm">
-                            <Maximize2 class="size-3.5 text-muted-foreground" />
-                            Elements
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p class="mb-2 text-xs text-muted-foreground">
-                            Click to select &middot; Double-click text to edit
-                            &middot; Delete to remove &middot; Ctrl+D to
-                            duplicate
-                        </p>
-                        <div class="max-h-56 space-y-1 overflow-y-auto">
-                            <div
-                                v-for="el in currentSide.elements"
-                                :key="el.id"
-                                class="flex cursor-pointer items-center justify-between rounded-md px-2 py-1.5 text-xs transition-colors hover:bg-accent"
-                                :class="{
-                                    'bg-accent': selectedElementId === el.id,
-                                }"
-                                @click="selectedElementId = el.id"
-                                @dblclick="
-                                    el.type === 'text'
-                                        ? startEditText(el.id)
-                                        : undefined
-                                "
-                            >
-                                <span class="flex items-center gap-1.5">
-                                    <Type
-                                        v-if="el.type === 'text'"
-                                        class="size-3"
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >Border Color</Label
+                                >
+                                <div class="flex items-center gap-1.5">
+                                    <input
+                                        type="color"
+                                        :value="selectedElement.borderColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'borderColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="size-8 cursor-pointer rounded border p-0.5"
                                     />
-                                    <UserCircle v-else class="size-3" />
-                                    {{
-                                        el.type === 'photo'
-                                            ? 'Photo'
-                                            : el.content.length > 20
-                                              ? resolveContent(
-                                                    el.content,
-                                                ).substring(0, 20) + '...'
-                                              : resolveContent(el.content)
-                                    }}
-                                </span>
-                                <div class="flex items-center gap-0.5">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        class="size-5"
-                                        title="Duplicate"
-                                        @click.stop="duplicateElement(el.id)"
-                                    >
-                                        <Copy class="size-2.5" />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        class="size-5 text-destructive"
-                                        @click.stop="deleteElement(el.id)"
-                                    >
-                                        <Trash2 class="size-2.5" />
-                                    </Button>
+                                    <Input
+                                        :value="selectedElement.borderColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'borderColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="h-8 flex-1 font-mono text-xs uppercase"
+                                    />
                                 </div>
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
+                    </template>
+
+                    <!-- SHAPE PROPERTIES -->
+                    <template v-else-if="selectedElement.type === 'shape'">
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                Shape Type
+                            </h4>
+                            <div class="flex rounded-lg bg-muted p-1">
+                                <Button
+                                    size="sm"
+                                    :variant="
+                                        selectedElement.shapeType ===
+                                        'rectangle'
+                                            ? 'default'
+                                            : 'ghost'
+                                    "
+                                    class="h-8 flex-1"
+                                    @click="
+                                        updateSelectedProp(
+                                            'shapeType',
+                                            'rectangle',
+                                        )
+                                    "
+                                    ><Square class="h-4 w-4"
+                                /></Button>
+                                <Button
+                                    size="sm"
+                                    :variant="
+                                        selectedElement.shapeType === 'circle'
+                                            ? 'default'
+                                            : 'ghost'
+                                    "
+                                    class="h-8 flex-1"
+                                    @click="
+                                        updateSelectedProp(
+                                            'shapeType',
+                                            'circle',
+                                        )
+                                    "
+                                    ><Circle class="h-4 w-4"
+                                /></Button>
+                                <Button
+                                    size="sm"
+                                    :variant="
+                                        selectedElement.shapeType === 'line'
+                                            ? 'default'
+                                            : 'ghost'
+                                    "
+                                    class="h-8 flex-1"
+                                    @click="
+                                        updateSelectedProp('shapeType', 'line')
+                                    "
+                                    ><Minus class="h-4 w-4"
+                                /></Button>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                Dimensions
+                            </h4>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs text-muted-foreground"
+                                        >Width (%)</Label
+                                    >
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        :value="
+                                            Math.round(selectedElement.width)
+                                        "
+                                        @input="
+                                            updateSelectedProp(
+                                                'width',
+                                                parseInt(
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                ),
+                                            )
+                                        "
+                                        class="h-8"
+                                    />
+                                </div>
+                                <div class="space-y-1.5">
+                                    <Label class="text-xs text-muted-foreground"
+                                        >Height (%)</Label
+                                    >
+                                    <Input
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        :value="
+                                            Math.round(selectedElement.height)
+                                        "
+                                        @input="
+                                            updateSelectedProp(
+                                                'height',
+                                                parseInt(
+                                                    (
+                                                        $event.target as HTMLInputElement
+                                                    ).value,
+                                                ),
+                                            )
+                                        "
+                                        class="h-8"
+                                    />
+                                </div>
+                            </div>
+
+                            <div
+                                class="space-y-1.5"
+                                v-if="selectedElement.shapeType === 'rectangle'"
+                            >
+                                <Label
+                                    class="flex justify-between text-xs text-muted-foreground"
+                                    >Corner Radius
+                                    <span
+                                        >{{
+                                            selectedElement.borderRadius
+                                        }}px</span
+                                    ></Label
+                                >
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="100"
+                                    :value="selectedElement.borderRadius"
+                                    @input="
+                                        updateSelectedProp(
+                                            'borderRadius',
+                                            parseInt(
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            ),
+                                        )
+                                    "
+                                    class="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                Appearance
+                            </h4>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >Fill Color</Label
+                                >
+                                <div class="flex items-center gap-1.5">
+                                    <input
+                                        type="color"
+                                        :value="selectedElement.backgroundColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'backgroundColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="size-8 cursor-pointer rounded border p-0.5"
+                                    />
+                                    <Input
+                                        :value="selectedElement.backgroundColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'backgroundColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="h-8 flex-1 font-mono text-xs uppercase"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label
+                                    class="flex justify-between text-xs text-muted-foreground"
+                                    >Border Width
+                                    <span
+                                        >{{
+                                            selectedElement.borderWidth
+                                        }}px</span
+                                    ></Label
+                                >
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="10"
+                                    :value="selectedElement.borderWidth"
+                                    @input="
+                                        updateSelectedProp(
+                                            'borderWidth',
+                                            parseInt(
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            ),
+                                        )
+                                    "
+                                    class="w-full"
+                                />
+                            </div>
+                            <div
+                                class="space-y-1.5"
+                                v-if="selectedElement.borderWidth > 0"
+                            >
+                                <Label class="text-xs text-muted-foreground"
+                                    >Border Color</Label
+                                >
+                                <div class="flex items-center gap-1.5">
+                                    <input
+                                        type="color"
+                                        :value="selectedElement.borderColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'borderColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="size-8 cursor-pointer rounded border p-0.5"
+                                    />
+                                    <Input
+                                        :value="selectedElement.borderColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'borderColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="h-8 flex-1 font-mono text-xs uppercase"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- QR PROPERTIES -->
+                    <template v-else-if="selectedElement.type === 'qr'">
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                QR Code Data
+                            </h4>
+                            <div class="space-y-1.5">
+                                <Input
+                                    :value="selectedElement.content"
+                                    @input="
+                                        updateSelectedProp(
+                                            'content',
+                                            ($event.target as HTMLInputElement)
+                                                .value,
+                                        )
+                                    "
+                                />
+                            </div>
+                            <div class="flex flex-wrap gap-1.5">
+                                <button
+                                    v-for="field in DYNAMIC_FIELDS"
+                                    :key="field.value"
+                                    class="rounded border px-2 py-1 text-[10px] font-medium transition-colors hover:bg-primary hover:text-primary-foreground"
+                                    :class="
+                                        selectedElement.content === field.value
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'bg-background text-muted-foreground'
+                                    "
+                                    @click="
+                                        updateSelectedProp(
+                                            'content',
+                                            field.value,
+                                        )
+                                    "
+                                >
+                                    {{ field.label }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <Separator />
+
+                        <div class="space-y-4">
+                            <h4
+                                class="text-xs font-semibold tracking-wider text-muted-foreground uppercase"
+                            >
+                                Appearance
+                            </h4>
+                            <div class="space-y-1.5">
+                                <Label
+                                    class="flex justify-between text-xs text-muted-foreground"
+                                    >Size (%)
+                                    <span
+                                        >{{ selectedElement.size }}%</span
+                                    ></Label
+                                >
+                                <input
+                                    type="range"
+                                    min="5"
+                                    max="80"
+                                    :value="selectedElement.size"
+                                    @input="
+                                        updateSelectedProp(
+                                            'size',
+                                            parseInt(
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            ),
+                                        )
+                                    "
+                                    class="w-full"
+                                />
+                            </div>
+
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >QR Color</Label
+                                >
+                                <div class="flex items-center gap-1.5">
+                                    <input
+                                        type="color"
+                                        :value="selectedElement.color"
+                                        @input="
+                                            updateSelectedProp(
+                                                'color',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="size-8 cursor-pointer rounded border p-0.5"
+                                    />
+                                    <Input
+                                        :value="selectedElement.color"
+                                        @input="
+                                            updateSelectedProp(
+                                                'color',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="h-8 flex-1 font-mono text-xs uppercase"
+                                    />
+                                </div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <Label class="text-xs text-muted-foreground"
+                                    >Background Color</Label
+                                >
+                                <div class="flex items-center gap-1.5">
+                                    <input
+                                        type="color"
+                                        :value="selectedElement.backgroundColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'backgroundColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="size-8 cursor-pointer rounded border p-0.5"
+                                    />
+                                    <Input
+                                        :value="selectedElement.backgroundColor"
+                                        @input="
+                                            updateSelectedProp(
+                                                'backgroundColor',
+                                                (
+                                                    $event.target as HTMLInputElement
+                                                ).value,
+                                            )
+                                        "
+                                        class="h-8 flex-1 font-mono text-xs uppercase"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div
+                    class="flex flex-1 flex-col items-center justify-center p-8 text-center text-muted-foreground"
+                    v-else
+                >
+                    <MousePointerClick class="mb-3 h-12 w-12 opacity-20" />
+                    <p class="text-sm font-medium">No Element Selected</p>
+                    <p class="mt-1 text-xs opacity-70">
+                        Click on an element in the canvas or layers panel to
+                        edit its properties.
+                    </p>
+                </div>
             </div>
         </div>
     </div>
 </template>
+
+<style scoped>
+/* Range input styling for a better UI */
+input[type='range'] {
+    -webkit-appearance: none;
+    width: 100%;
+    background: transparent;
+}
+input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: hsl(var(--primary));
+    cursor: pointer;
+    margin-top: -6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+input[type='range']::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 4px;
+    cursor: pointer;
+    background: hsl(var(--muted));
+    border-radius: 2px;
+}
+input[type='range']:focus {
+    outline: none;
+}
+input[type='range']:focus::-webkit-slider-thumb {
+    outline: 2px solid hsl(var(--ring));
+}
+</style>

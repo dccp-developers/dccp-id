@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, FolderGit2, IdCard, LayoutGrid } from 'lucide-vue-next';
+import { BookOpen, FolderGit2, IdCard, LayoutGrid, Palette } from 'lucide-vue-next';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -44,6 +44,11 @@ const mainNavItems = computed<NavItem[]>(() => [
         title: 'Students',
         href: studentsUrl.value,
         icon: IdCard,
+    },
+    {
+        title: 'Templates',
+        href: page.props.currentTeam ? `/` + (page.props.currentTeam as any).slug + `/templates` : '/templates',
+        icon: Palette,
     },
 ]);
 

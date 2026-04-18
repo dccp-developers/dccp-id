@@ -3,7 +3,6 @@ import { Form, Head, usePage } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import IdCardPreview from '@/components/IdCardPreview.vue';
-import TemplateEditor from '@/components/TemplateEditor.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -104,10 +103,6 @@ const editorStudentData = computed(() => ({
     contactNumber: formContactNumber.value || '—',
     guardianContactPerson: formGuardian.value || '—',
 }));
-
-function onTemplateConfigChange(newConfig: TemplateConfig) {
-    templateConfig.value = newConfig;
-}
 </script>
 
 <template>
@@ -257,7 +252,7 @@ function onTemplateConfigChange(newConfig: TemplateConfig) {
                             >
                         </CardHeader>
                         <CardContent>
-                            <div class="grid grid-cols-5 gap-3">
+                            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
                                 <button
                                     v-for="tmpl in templates.filter(
                                         (t) => t.value !== 'custom',
@@ -272,11 +267,11 @@ function onTemplateConfigChange(newConfig: TemplateConfig) {
                                     ]"
                                     @click="
                                         selectedTemplate = tmpl.value;
-                                        templateConfig = null;
                                     "
                                 >
                                     <IdCardPreview
-                                        :template="tmpl.value"
+                                        :template="tmpl.value.startsWith('db_') ? 'custom' : tmpl.value"
+                                        :config="tmpl.config"
                                         side="front"
                                         :data="{
                                             name: formName || 'Student',
@@ -295,69 +290,19 @@ function onTemplateConfigChange(newConfig: TemplateConfig) {
                                     >
                                 </button>
                             </div>
-                            <Separator class="my-4" />
-                            <button
-                                type="button"
-                                :class="[
-                                    'flex w-full items-center justify-center gap-2 rounded-lg border-2 p-3 transition-all',
-                                    selectedTemplate === 'custom'
-                                        ? 'border-primary bg-primary/5 shadow-sm'
-                                        : 'border-dashed border-muted-foreground/20 hover:border-primary/40 hover:bg-muted/50',
-                                ]"
-                                @click="selectedTemplate = 'custom'"
-                            >
-                                <UserCircle class="size-4" />
-                                <span class="text-sm font-medium">{{
-                                    selectedTemplate === 'custom'
-                                        ? 'Editing Custom Template...'
-                                        : 'Design Your Own Template'
-                                }}</span>
-                            </button>
+                            
                             <input
                                 type="hidden"
                                 name="template"
                                 :value="selectedTemplate"
                             />
-                            <input
-                                type="hidden"
-                                name="template_config"
-                                :value="
-                                    selectedTemplate === 'custom' &&
-                                    templateConfig
-                                        ? JSON.stringify(templateConfig)
-                                        : ''
-                                "
-                            />
                             <InputError :message="errors.template" />
                         </CardContent>
                     </Card>
-
-                    <div v-if="selectedTemplate === 'custom'" class="space-y-4">
-                        <Card>
-                            <CardHeader class="pb-3">
-                                <CardTitle class="text-base"
-                                    >Custom Template Editor</CardTitle
-                                >
-                                <CardDescription
-                                    >Drag elements to position them. Switch
-                                    between Front and Back to design both
-                                    sides.</CardDescription
-                                >
-                            </CardHeader>
-                            <CardContent>
-                                <TemplateEditor
-                                    :model-value="templateConfig"
-                                    :photo-url="photoPreview"
-                                    :student-data="editorStudentData"
-                                    @update:model-value="onTemplateConfigChange"
-                                />
-                            </CardContent>
-                        </Card>
-                    </div>
                 </div>
 
                 <div class="space-y-4 self-start lg:sticky lg:top-6">
-                    <Card v-if="selectedTemplate !== 'custom'">
+                    <Card>
                         <CardHeader class="pb-3">
                             <CardTitle class="text-base"
                                 >Live Preview</CardTitle
@@ -385,7 +330,8 @@ function onTemplateConfigChange(newConfig: TemplateConfig) {
                                     class="mt-4 flex justify-center"
                                 >
                                     <IdCardPreview
-                                        :template="selectedTemplate"
+                                        :template="selectedTemplate.startsWith('db_') ? 'custom' : selectedTemplate"
+                                        :config="templates.find(t => t.value === selectedTemplate)?.config"
                                         side="front"
                                         :data="previewData"
                                     />
@@ -395,7 +341,8 @@ function onTemplateConfigChange(newConfig: TemplateConfig) {
                                     class="mt-4 flex justify-center"
                                 >
                                     <IdCardPreview
-                                        :template="selectedTemplate"
+                                        :template="selectedTemplate.startsWith('db_') ? 'custom' : selectedTemplate"
+                                        :config="templates.find(t => t.value === selectedTemplate)?.config"
                                         side="back"
                                         :data="previewData"
                                     />
@@ -405,7 +352,8 @@ function onTemplateConfigChange(newConfig: TemplateConfig) {
                                     class="mt-4 flex justify-center"
                                 >
                                     <IdCardPreview
-                                        :template="selectedTemplate"
+                                        :template="selectedTemplate.startsWith('db_') ? 'custom' : selectedTemplate"
+                                        :config="templates.find(t => t.value === selectedTemplate)?.config"
                                         side="both"
                                         :data="previewData"
                                     />
