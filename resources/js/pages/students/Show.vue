@@ -108,7 +108,7 @@ function deleteStudent() {
 <template>
     <Head title="Student Details" />
 
-    <div class="space-y-6">
+    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <div
             class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
         >

@@ -8,6 +8,7 @@ type CardData = {
     contactNumber: string;
     guardianContactPerson: string;
     photoUrl: string | null;
+    signatureUrl?: string | null;
     schoolName: string;
 };
 
@@ -43,7 +44,16 @@ type PhotoElement = {
     borderRadius: number;
 };
 
-type TemplateElement = TextElement | PhotoElement;
+type SignatureElement = {
+    id: string;
+    type: 'signature';
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+
+type TemplateElement = TextElement | PhotoElement | SignatureElement;
 type CardSide = { background: Background; elements: TemplateElement[] };
 type TemplateConfig = { front: CardSide; back: CardSide };
 
@@ -158,6 +168,27 @@ function resolveContent(content: string): string {
                         >
                     </div>
                     <div
+                        v-else-if="el.type === 'signature'"
+                        class="absolute flex items-center justify-center overflow-hidden"
+                        :style="{
+                            left: el.x + '%',
+                            top: el.y + '%',
+                            transform: 'translate(-50%, -50%)',
+                            width: (el.width / 100) * CARD_W * scale + 'px',
+                            height: (el.height / 100) * CARD_H * scale + 'px',
+                        }"
+                    >
+                        <img
+                            v-if="data.signatureUrl"
+                            :src="data.signatureUrl"
+                            alt=""
+                            class="size-full object-contain"
+                        />
+                        <div v-else class="flex size-full items-center justify-center border border-dashed border-black/20 bg-black/5">
+                            <span class="text-[8px] opacity-40">Signature</span>
+                        </div>
+                    </div>
+                    <div
                         v-else-if="el.type === 'text'"
                         class="absolute"
                         :style="{
@@ -209,6 +240,27 @@ function resolveContent(content: string): string {
                             :style="{ fontSize: 8 * scale + 'px' }"
                             >{{ initials(data.name) }}</span
                         >
+                    </div>
+                    <div
+                        v-else-if="el.type === 'signature'"
+                        class="absolute flex items-center justify-center overflow-hidden"
+                        :style="{
+                            left: el.x + '%',
+                            top: el.y + '%',
+                            transform: 'translate(-50%, -50%)',
+                            width: (el.width / 100) * CARD_W * scale + 'px',
+                            height: (el.height / 100) * CARD_H * scale + 'px',
+                        }"
+                    >
+                        <img
+                            v-if="data.signatureUrl"
+                            :src="data.signatureUrl"
+                            alt=""
+                            class="size-full object-contain"
+                        />
+                        <div v-else class="flex size-full items-center justify-center border border-dashed border-black/20 bg-black/5">
+                            <span class="text-[8px] opacity-40">Signature</span>
+                        </div>
                     </div>
                     <div
                         v-else-if="el.type === 'text'"

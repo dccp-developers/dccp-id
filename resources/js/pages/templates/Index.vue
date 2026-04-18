@@ -47,7 +47,7 @@ function deleteTemplate(id: number) {
 <template>
     <Head title="Templates" />
 
-    <div class="space-y-6">
+    <div class="space-y-6 px-4 py-6">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight">Templates</h1>

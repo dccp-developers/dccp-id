@@ -3,6 +3,7 @@ import { Form, Head, usePage } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import IdCardPreview from '@/components/IdCardPreview.vue';
+import SignaturePad from '@/components/SignaturePad.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -68,6 +69,7 @@ const formName = ref('');
 const formCourse = ref('');
 const formContactNumber = ref('');
 const formGuardian = ref('');
+const formSignature = ref<string | null>(null);
 
 const previewData = computed(() => ({
     name: formName.value || 'Student Name',
@@ -108,7 +110,7 @@ const editorStudentData = computed(() => ({
 <template>
     <Head title="Add Student" />
 
-    <div class="space-y-6">
+    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <div>
             <h1 class="text-2xl font-bold tracking-tight">Add Student</h1>
             <p class="text-sm text-muted-foreground">
@@ -234,6 +236,17 @@ const editorStudentData = computed(() => ({
                                         "
                                     />
                                 </div>
+                            </div>
+                            
+                            <Separator class="my-4" />
+                            
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <Label>Signature</Label>
+                                    <span class="text-xs text-muted-foreground">Optional, will appear on ID</span>
+                                </div>
+                                <SignaturePad v-model="formSignature" />
+                                <input type="hidden" name="signature" :value="formSignature || ''" />
                             </div>
                         </CardContent>
                     </Card>

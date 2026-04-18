@@ -45,7 +45,7 @@
             return "background-color: {$color};";
         }
 
-        function renderElement($el, $placeholderMap, $photoBase64) {
+        function renderElement($el, $placeholderMap, $photoBase64, $signatureBase64) {
             $type = $el['type'] ?? 'text';
             $x = ($el['x'] ?? 50) . '%';
             $y = ($el['y'] ?? 50) . '%';
@@ -61,9 +61,19 @@
                 $br = ($el['borderRadius'] ?? 6) . 'px';
                 $transform = 'translate(-50%, -50%)';
                 if ($photoBase64) {
-                    return "<div class=\"element\" style=\"left: {$x}; top: {$y}; width: {$w}; height: {$h}; transform: {$transform}; border-radius: {$br}; overflow: hidden; border: 2px solid rgba(255,255,255,0.5);\"><img src=\"{$photoBase64}\" style=\"width: 100%; height: 100%; object-fit: cover;\"></div>";
+                    return "<div class=\"element\" style=\"left: {$x}; top: {$y}; width: {$w}; height: {$h}; transform: {$transform}; border-radius: {$br}; overflow: hidden;\"><img src=\"{$photoBase64}\" style=\"width: 100%; height: 100%; object-fit: cover;\"></div>";
                 }
-                return "<div class=\"element\" style=\"left: {$x}; top: {$y}; width: {$w}; height: {$h}; transform: {$transform}; border-radius: {$br}; background: rgba(128,128,128,0.3); display: flex; align-items: center; justify-content: center; font-size: 14pt; color: rgba(255,255,255,0.6);\">" . strtoupper(substr($student->name ?? 'S', 0, 1)) . "</div>";
+                return "<div class=\"element\" style=\"left: {$x}; top: {$y}; width: {$w}; height: {$h}; transform: {$transform}; border-radius: {$br}; background: rgba(128,128,128,0.3); display: flex; align-items: center; justify-content: center; font-size: 14pt; color: rgba(255,255,255,0.6);\">" . strtoupper(substr($placeholderMap['{{student.name}}'] ?? 'S', 0, 1)) . "</div>";
+            }
+            
+            if ($type === 'signature') {
+                $w = ($el['width'] ?? 30) . '%';
+                $h = ($el['height'] ?? 15) . '%';
+                $transform = 'translate(-50%, -50%)';
+                if ($signatureBase64) {
+                    return "<div class=\"element\" style=\"left: {$x}; top: {$y}; width: {$w}; height: {$h}; transform: {$transform}; overflow: hidden;\"><img src=\"{$signatureBase64}\" style=\"width: 100%; height: 100%; object-fit: contain;\"></div>";
+                }
+                return "";
             }
 
             $content = $el['content'] ?? '';
@@ -78,14 +88,14 @@
     {{-- FRONT --}}
     <div class="page" style="{{ renderBackground($front) }}">
         @foreach(($front['elements'] ?? []) as $element)
-            {!! renderElement($element, $placeholderMap, $photoBase64) !!}
+            {!! renderElement($element, $placeholderMap, $photoBase64 ?? null, $signatureBase64 ?? null) !!}
         @endforeach
     </div>
 
     {{-- BACK --}}
     <div class="page" style="{{ renderBackground($back) }}">
         @foreach(($back['elements'] ?? []) as $element)
-            {!! renderElement($element, $placeholderMap, $photoBase64) !!}
+            {!! renderElement($element, $placeholderMap, $photoBase64 ?? null, $signatureBase64 ?? null) !!}
         @endforeach
     </div>
 </body>

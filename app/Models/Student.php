@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
-#[Fillable(['student_id_number', 'name', 'course', 'contact_number', 'guardian_contact_person', 'photo_path', 'template', 'template_config'])]
+#[Fillable(['student_id_number', 'name', 'course', 'contact_number', 'guardian_contact_person', 'photo_path', 'signature_path', 'template', 'template_config'])]
 class Student extends Model
 {
     /** @use HasFactory<StudentFactory> */

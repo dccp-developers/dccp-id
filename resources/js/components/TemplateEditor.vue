@@ -30,6 +30,7 @@ import {
     Settings2,
     Layers,
     Palette,
+    PenLine,
 } from 'lucide-vue-next';
 
 type Background = {
@@ -102,7 +103,18 @@ type QrElement = {
     rotation: number;
 };
 
-type TemplateElement = TextElement | PhotoElement | ShapeElement | QrElement;
+type SignatureElement = {
+    id: string;
+    type: 'signature';
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    opacity: number;
+    rotation: number;
+};
+
+type TemplateElement = TextElement | PhotoElement | ShapeElement | QrElement | SignatureElement;
 
 type CardSide = {
     background: Background;
@@ -506,6 +518,23 @@ function addPhotoElement() {
             opacity: 100,
             borderColor: '#ffffff33',
             borderWidth: 1,
+            rotation: 0,
+        });
+    });
+    selectedElementId.value = id;
+}
+
+function addSignatureElement() {
+    const id = `el-${Date.now()}`;
+    updateConfig((c) => {
+        c[activeSide.value].elements.push({
+            id,
+            type: 'signature',
+            x: 50,
+            y: 50,
+            width: 30,
+            height: 15,
+            opacity: 100,
             rotation: 0,
         });
     });
@@ -989,6 +1018,9 @@ onUnmounted(() => {
                 <Button variant="outline" size="sm" @click="addQrElement"
                     ><QrCode class="mr-1.5 h-4 w-4" /> QR</Button
                 >
+                <Button variant="outline" size="sm" @click="addSignatureElement"
+                    ><PenLine class="mr-1.5 h-4 w-4" /> Signature</Button
+                >
             </div>
         </div>
 
@@ -1067,6 +1099,10 @@ onUnmounted(() => {
                                     v-else-if="el.type === 'qr'"
                                     class="size-4 text-muted-foreground"
                                 />
+                                <PenLine
+                                    v-else-if="el.type === 'signature'"
+                                    class="size-4 text-muted-foreground"
+                                />
 
                                 <span class="max-w-[140px] truncate">
                                     {{
@@ -1076,11 +1112,13 @@ onUnmounted(() => {
                                               ? 'Shape (' + el.shapeType + ')'
                                               : el.type === 'qr'
                                                 ? 'QR Code'
-                                                : el.content.length > 20
-                                                  ? resolveContent(
-                                                        el.content,
-                                                    ).substring(0, 20) + '...'
-                                                  : resolveContent(el.content)
+                                                : el.type === 'signature'
+                                                  ? 'Signature'
+                                                  : el.content.length > 20
+                                                    ? resolveContent(
+                                                          el.content,
+                                                      ).substring(0, 20) + '...'
+                                                    : resolveContent(el.content)
                                     }}
                                 </span>
                             </span>
@@ -1455,6 +1493,50 @@ onUnmounted(() => {
                                 v-else
                                 class="size-10 text-muted-foreground/60"
                             />
+
+                            <template v-if="selectedElementId === el.id">
+                                <div
+                                    class="absolute top-0 left-0 size-3 -translate-x-1/2 -translate-y-1/2 cursor-nw-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'nw')
+                                    "
+                                />
+                                <div
+                                    class="absolute top-0 right-0 size-3 translate-x-1/2 -translate-y-1/2 cursor-ne-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'ne')
+                                    "
+                                />
+                                <div
+                                    class="absolute bottom-0 left-0 size-3 -translate-x-1/2 translate-y-1/2 cursor-sw-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'sw')
+                                    "
+                                />
+                                <div
+                                    class="absolute right-0 bottom-0 size-3 translate-x-1/2 translate-y-1/2 cursor-se-resize rounded-full border-2 border-white bg-blue-500 shadow-sm"
+                                    @mousedown.stop="
+                                        onResizeMouseDown($event, el.id, 'se')
+                                    "
+                                />
+                            </template>
+                        </div>
+
+                        <div
+                            v-else-if="el.type === 'signature'"
+                            class="relative flex items-center justify-center overflow-hidden bg-muted/5 border border-dashed border-black/20"
+                            :class="
+                                selectedElementId === el.id
+                                    ? 'ring-2 ring-blue-500 ring-offset-0'
+                                    : 'hover:ring-2 hover:ring-blue-300 hover:ring-offset-0'
+                            "
+                            :style="{
+                                width: (el.width / 100) * CARD_WIDTH + 'px',
+                                height: (el.height / 100) * CARD_HEIGHT + 'px',
+                                opacity: (el.opacity ?? 100) / 100,
+                            }"
+                        >
+                            <span class="pointer-events-none text-[8px] opacity-40">Signature</span>
 
                             <template v-if="selectedElementId === el.id">
                                 <div

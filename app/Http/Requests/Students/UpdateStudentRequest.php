@@ -23,6 +23,7 @@ class UpdateStudentRequest extends FormRequest
             'contact_number' => ['required', 'string', 'max:255'],
             'guardian_contact_person' => ['required', 'string', 'max:255'],
             'photo' => ['nullable', 'image', 'max:2048'],
+            'signature' => ['nullable', 'string'],
             'template' => ['nullable', 'string'],
             'template_config' => ['nullable', 'array'],
             'template_config.front' => ['nullable', 'array'],

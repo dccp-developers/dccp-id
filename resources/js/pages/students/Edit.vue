@@ -3,6 +3,7 @@ import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
 import IdCardPreview from '@/components/IdCardPreview.vue';
+import SignaturePad from '@/components/SignaturePad.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -88,6 +89,9 @@ const formName = ref(props.student.name);
 const formCourse = ref(props.student.course);
 const formContactNumber = ref(props.student.contact_number);
 const formGuardian = ref(props.student.guardian_contact_person);
+const formSignature = ref<string | null>(
+    props.student.signature_path ? `/storage/${props.student.signature_path}` : null,
+);
 
 const previewData = computed(() => ({
     name: formName.value || 'Student Name',
@@ -128,7 +132,7 @@ const editorStudentData = computed(() => ({
 <template>
     <Head title="Edit Student" />
 
-    <div class="space-y-6">
+    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <div class="flex items-center justify-between">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight">Edit Student</h1>
@@ -262,6 +266,17 @@ const editorStudentData = computed(() => ({
                                         "
                                     />
                                 </div>
+                            </div>
+                            
+                            <Separator class="my-4" />
+                            
+                            <div class="space-y-3">
+                                <div class="flex items-center justify-between">
+                                    <Label>Signature</Label>
+                                    <span class="text-xs text-muted-foreground">Optional, will appear on ID</span>
+                                </div>
+                                <SignaturePad v-model="formSignature" />
+                                <input type="hidden" name="signature" :value="formSignature || ''" />
                             </div>
                         </CardContent>
                     </Card>

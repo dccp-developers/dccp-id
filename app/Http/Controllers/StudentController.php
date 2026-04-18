@@ -47,7 +47,19 @@ class StudentController extends Controller
             $validated['photo_path'] = $request->file('photo')->store('photos', 'public');
         }
 
-        unset($validated['photo']);
+        if (!empty($validated['signature'])) {
+            $signatureData = $validated['signature'];
+            if (preg_match('/^data:image\/(\w+);base64,/', $signatureData, $type)) {
+                $signatureData = substr($signatureData, strpos($signatureData, ',') + 1);
+                $type = strtolower($type[1]);
+                $signatureData = base64_decode($signatureData);
+                $filename = 'signatures/' . uniqid() . '.' . $type;
+                Storage::disk('public')->put($filename, $signatureData);
+                $validated['signature_path'] = $filename;
+            }
+        }
+
+        unset($validated['photo'], $validated['signature']);
 
         Student::create($validated);
 
@@ -83,7 +95,26 @@ class StudentController extends Controller
             $validated['photo_path'] = $request->file('photo')->store('photos', 'public');
         }
 
-        unset($validated['photo']);
+        if (array_key_exists('signature', $validated)) {
+            if (empty($validated['signature'])) {
+                if ($student->signature_path) {
+                    Storage::disk('public')->delete($student->signature_path);
+                    $validated['signature_path'] = null;
+                }
+            } else if (preg_match('/^data:image\/(\w+);base64,/', $validated['signature'], $type)) {
+                if ($student->signature_path) {
+                    Storage::disk('public')->delete($student->signature_path);
+                }
+                $signatureData = substr($validated['signature'], strpos($validated['signature'], ',') + 1);
+                $type = strtolower($type[1]);
+                $signatureData = base64_decode($signatureData);
+                $filename = 'signatures/' . uniqid() . '.' . $type;
+                Storage::disk('public')->put($filename, $signatureData);
+                $validated['signature_path'] = $filename;
+            }
+        }
+
+        unset($validated['photo'], $validated['signature']);
 
         $student->update($validated);
 
@@ -96,6 +127,9 @@ class StudentController extends Controller
     {
         if ($student->photo_path) {
             Storage::disk('public')->delete($student->photo_path);
+        }
+        if ($student->signature_path) {
+            Storage::disk('public')->delete($student->signature_path);
         }
 
         $student->delete();
@@ -114,6 +148,13 @@ class StudentController extends Controller
             $photoBase64 = "data:{$mimeType};base64,{$photoBase64}";
         }
 
+        $signatureBase64 = null;
+        if ($student->signature_path && Storage::disk('public')->exists($student->signature_path)) {
+            $signatureBase64 = base64_encode(Storage::disk('public')->get($student->signature_path));
+            $mimeType = Storage::disk('public')->mimeType($student->signature_path);
+            $signatureBase64 = "data:{$mimeType};base64,{$signatureBase64}";
+        }
+
         $template = $student->template ?? 'classic';
 
         if (str_starts_with($template, 'db_')) {
@@ -124,6 +165,7 @@ class StudentController extends Controller
                 $viewData = [
                     'student' => $student,
                     'photoBase64' => $photoBase64,
+                    'signatureBase64' => $signatureBase64,
                     'config' => $dbTemplate->config,
                 ];
             } else {
@@ -134,6 +176,7 @@ class StudentController extends Controller
             $viewData = [
                 'student' => $student,
                 'photoBase64' => $photoBase64,
+                'signatureBase64' => $signatureBase64,
                 'config' => $student->template_config,
             ];
         }
@@ -148,6 +191,7 @@ class StudentController extends Controller
             $viewData = [
                 'student' => $student,
                 'photoBase64' => $photoBase64,
+                'signatureBase64' => $signatureBase64,
             ];
         }
 
